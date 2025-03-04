@@ -61,5 +61,31 @@ router.post("/signup", async (req, res) => {
         res.status(500).json({ message: "Error signing up", error });
     }
 });
+router.post("/login", async (req, res) => {
+    try {
+        const { email, password } = req.body;
 
+        // Find user by email OR username
+        const user = await User.findOne({
+            where: {
+                [Op.or]: [{ email }, { username: email }]
+            }
+        });
+
+        if (!user || !(await bcrypt.compare(password, user.password_hash))) {
+            return res.status(401).json({ message: "Invalid credentials" });
+        }
+
+        const token = jwt.sign(
+            { username: user.username, email: user.email, role: user.role, userId: user.id },
+            JWT_SECRET,
+            { expiresIn: "1h" }
+        );
+
+        // Include userId in the response
+        res.json({ token, userId: user.id, name: user.username, role: user.role });
+    } catch (error) {
+        res.status(500).json({ message: "Error logging in", error });
+    }
+});
 module.exports = router;
