@@ -129,4 +129,115 @@ router.delete("/groups/:id", async (req, res) => {
         res.status(500).json({ message: "Error deleting group", error: error.message });
     }
 });
+// User-Group relationship routes
+router.get("/user-groups", async (req, res) => {
+    try {
+        const userGroups = await UserGroup.findAll();
+        res.json(userGroups);
+    } catch (error) {
+        console.error("Error fetching user-groups:", error);
+        res.status(500).json({ message: "Error fetching user-groups", error: error.message });
+    }
+});
+
+router.post("/user-groups", async (req, res) => {
+    try {
+        const { user_id, group_id } = req.body;
+        
+        if (!user_id || !group_id) {
+            return res.status(400).json({ message: "User ID and Group ID are required" });
+        }
+        
+        const user = await User.findByPk(user_id);
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
+        
+        const group = await Group.findByPk(group_id);
+        if (!group) {
+            return res.status(404).json({ message: "Group not found" });
+        }
+        
+        const existingRelation = await UserGroup.findOne({
+            where: { user_id, group_id }
+        });
+        
+        if (existingRelation) {
+            return res.status(400).json({ message: "User is already a member of this group" });
+        }
+        
+        await UserGroup.create({ user_id, group_id });
+        res.status(201).json({ message: "User added to group successfully" });
+    } catch (error) {
+        console.error("Error adding user to group:", error);
+        res.status(500).json({ message: "Error adding user to group", error: error.message });
+    }
+});
+
+router.delete("/user-groups", async (req, res) => {
+    try {
+        const { user_id, group_id } = req.body;
+        
+        if (!user_id || !group_id) {
+            return res.status(400).json({ message: "User ID and Group ID are required" });
+        }
+        
+        const relation = await UserGroup.findOne({
+            where: { user_id, group_id }
+        });
+        
+        if (!relation) {
+            return res.status(404).json({ message: "User is not a member of this group" });
+        }
+        
+        await relation.destroy();
+        res.json({ message: "User removed from group successfully" });
+    } catch (error) {
+        console.error("Error removing user from group:", error);
+        res.status(500).json({ message: "Error removing user from group", error: error.message });
+    }
+});
+
+router.get("/groups/:groupId/users", async (req, res) => {
+    try {
+        const { groupId } = req.params;
+        
+        const userGroups = await UserGroup.findAll({
+            where: { group_id: groupId }
+        });
+        
+        const userIds = userGroups.map(ug => ug.user_id);
+        
+        const users = await User.findAll({
+            where: { id: userIds },
+            attributes: ['id', 'username', 'email', 'role']
+        });
+        
+        res.json(users);
+    } catch (error) {
+        console.error("Error fetching users in group:", error);
+        res.status(500).json({ message: "Error fetching users in group", error: error.message });
+    }
+});
+
+router.get("/users/:userId/groups", async (req, res) => {
+    try {
+        const { userId } = req.params;
+        
+        const userGroups = await UserGroup.findAll({
+            where: { user_id: userId }
+        });
+        
+        const groupIds = userGroups.map(ug => ug.group_id);
+        
+        const groups = await Group.findAll({
+            where: { id: groupIds }
+        });
+        
+        res.json(groups);
+    } catch (error) {
+        console.error("Error fetching groups for user:", error);
+        res.status(500).json({ message: "Error fetching groups for user", error: error.message });
+    }
+});
 module.exports = router;
