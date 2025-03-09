@@ -129,6 +129,7 @@ router.delete("/groups/:id", async (req, res) => {
         res.status(500).json({ message: "Error deleting group", error: error.message });
     }
 });
+
 // User-Group relationship routes
 router.get("/user-groups", async (req, res) => {
     try {
@@ -240,4 +241,5 @@ router.get("/users/:userId/groups", async (req, res) => {
         res.status(500).json({ message: "Error fetching groups for user", error: error.message });
     }
 });
+
 module.exports = router;

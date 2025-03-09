@@ -16,7 +16,7 @@ const Login = ({ setUser }) => {
     setIsLoading(true);
 
     try {
-      const res = await axios.post('http://localhost:5001/auth//login', { email, password });
+      const res = await axios.post(`${import.meta.env.VITE_BACKEND_API_BASE_URL}/auth/login`, { email, password });
 
       sessionStorage.setItem('id', res.data.userId);
       sessionStorage.setItem('user_role', res.data.role);

@@ -51,16 +51,7 @@ router.post("/setup-admin", async (req, res) => {
         res.status(500).json({ message: "Error creating admin", error: error.message });
     }
 });
-router.post("/signup", async (req, res) => {
-    try {
-        const { username, email, password } = req.body;
-        const hashedPassword = await bcrypt.hash(password, 10);
-        await User.create({ username, email, password_hash: hashedPassword, role: "user" });
-        res.json({ message: "User created successfully" });
-    } catch (error) {
-        res.status(500).json({ message: "Error signing up", error });
-    }
-});
+
 router.post("/login", async (req, res) => {
     try {
         const { email, password } = req.body;
@@ -88,4 +79,16 @@ router.post("/login", async (req, res) => {
         res.status(500).json({ message: "Error logging in", error });
     }
 });
+
+router.post("/signup", async (req, res) => {
+    try {
+        const { username, email, password } = req.body;
+        const hashedPassword = await bcrypt.hash(password, 10);
+        await User.create({ username, email, password_hash: hashedPassword, role: "user" });
+        res.json({ message: "User created successfully" });
+    } catch (error) {
+        res.status(500).json({ message: "Error signing up", error });
+    }
+});
+
 module.exports = router;

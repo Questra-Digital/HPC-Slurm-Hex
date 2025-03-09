@@ -12,7 +12,7 @@ export default function AdminSetup() {
     const handleSetup = async (e) => {
         e.preventDefault();
         try {
-            await axios.post("http://localhost:5001/auth/setup-admin", { username: "admin", email, password });
+            await axios.post(`${import.meta.env.VITE_BACKEND_API_BASE_URL}/auth/setup-admin`, { username: "admin", email, password });
             navigate("/login");
             window.location.href = "/login";
         } catch (error) {
