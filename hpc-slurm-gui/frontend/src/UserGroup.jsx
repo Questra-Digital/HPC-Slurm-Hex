@@ -74,6 +74,12 @@ export default function UserGroup() {
         setError("");
         setSuccess("");
         
+        // Check password length
+        if (newUser.password.length < 6) {
+            setError("Password must be at least 6 characters long");
+            return;
+        }
+        
         try {
             await axios.post(`${import.meta.env.VITE_BACKEND_API_BASE_URL}/auth/signup`, newUser);
             setSuccess("User created successfully");
@@ -97,6 +103,15 @@ export default function UserGroup() {
 
     const handleUpdateUser = async (e) => {
         e.preventDefault();
+        setError("");
+        setSuccess("");
+        
+        // Check password length only if a new password is provided
+        if (newUser.password && newUser.password.length < 6) {
+            setError("Password must be at least 6 characters long");
+            return;
+        }
+        
         try {
             await axios.put(`${import.meta.env.VITE_BACKEND_API_BASE_URL}/users/users/${editingUser.id}`, newUser);
             setSuccess("User updated successfully");

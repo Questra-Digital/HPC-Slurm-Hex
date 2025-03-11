@@ -22,14 +22,30 @@ export default function Dashboard({ setActiveMenuItem }) {
     failed: 0,
     cancelledOther: 0
   });
+  const [masterNodeIp, setMasterNodeIp] = useState(null);
 
   useEffect(() => {
-    fetchJobs();
+    fetchMasterNodeIp();
   }, []);
 
-  const fetchJobs = async () => {
+  const fetchMasterNodeIp = async () => {
     try {
-      const response = await axios.get(`${import.meta.env.VITE_MASTER_NODE_API_BASE_URL}/jobs`);
+      const response = await axios.get(`${import.meta.env.VITE_BACKEND_API_BASE_URL}/nodes/get-nodes-list`);
+      const nodes = response.data;
+      const masterNode = nodes.find(node => node.node_type === "master");
+      if (masterNode) {
+        setMasterNodeIp(masterNode.ip_address);
+      }
+    } catch (error) {
+      console.error("Failed to fetch nodes list:", error);
+    }
+  };
+
+  const fetchJobs = async () => {
+    if (!masterNodeIp) return; // Wait until we have the master node IP
+    
+    try {
+      const response = await axios.get(`http://${masterNodeIp}:5000/jobs`);
       const allJobs = response.data.jobs || [];
       
       const filteredJobs = filterJobs(allJobs);
@@ -39,6 +55,12 @@ export default function Dashboard({ setActiveMenuItem }) {
       console.error("Failed to fetch jobs:", error);
     }
   };
+
+  useEffect(() => {
+    if (masterNodeIp) {
+      fetchJobs();
+    }
+  }, [masterNodeIp]);
 
   const filterJobs = (allJobs) => {
     return allJobs.filter(job => {

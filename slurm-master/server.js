@@ -12,6 +12,8 @@ const REDIS_HOST = process.env.REDIS_HOST || 'localhost';
 const REDIS_PORT = process.env.REDIS_PORT || 6379;
 const redisClient = redis.createClient({
   url: `redis://${REDIS_HOST}:${REDIS_PORT}`,
+  // Optional: Add password if Redis is configured with one
+  // password: process.env.REDIS_PASSWORD || undefined,
 });
 
 redisClient.on('error', (err) => console.log('Redis Client Error:', err));
@@ -195,6 +197,38 @@ function runCommand(command) {
     return null;
   }
 }
+
+app.post('/cancel-job', (req, res) => {
+  const data = req.body;
+  console.log("Received body:", data);
+  const jobId = data.Job_id;
+  
+  if (!jobId) {
+    return res.status(400).json({ error: "Missing job_id parameter" });
+  }
+
+  const { spawn } = require('child_process');
+  const scancel = spawn('scancel', [jobId]);
+  
+  let stderr = '';
+  
+  scancel.stderr.on('data', (data) => {
+    stderr += data.toString();
+  });
+  
+  scancel.on('close', (code) => {
+    if (code === 0) {
+      return res.status(200).json({ message: `Job '${jobId}' canceled successfully!` });
+    } else {
+      return res.status(500).json({ error: "Failed to cancel job", details: stderr });
+    }
+  });
+  
+  scancel.on('error', (err) => {
+    return res.status(500).json({ error: err.toString() });
+  });
+});
+
 
 // Route to check system connectivity and resources
 app.get('/connect', (req, res) => {

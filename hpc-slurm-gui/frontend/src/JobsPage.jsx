@@ -1,9 +1,8 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
+import Swal from 'sweetalert2';
 
-// API base URLs
-const BACKEND_API_BASE_URL = import.meta.env.VITE_BACKEND_API_BASE_URL
-const MASTER_NODE_API_BASE_URL = import.meta.env.VITE_MASTER_NODE_API_BASE_URL
+const BACKEND_API_BASE_URL = import.meta.env.VITE_BACKEND_API_BASE_URL;
 
 export default function JobsPage({ user }) {
   const [jobs, setJobs] = useState([]);
@@ -15,9 +14,10 @@ export default function JobsPage({ user }) {
   const [cpuRequest, setCpuRequest] = useState("");
   const [gpuRequest, setGpuRequest] = useState("");
   const [memoryRequest, setMemoryRequest] = useState(""); // In GB
-  const [username] = useState(sessionStorage.getItem("username") || "default_user_name");
+  const [username] = useState(sessionStorage.getItem("username") || "null");
   const [userRole] = useState(sessionStorage.getItem("user_role") || "user");
-  const [userId] = useState(sessionStorage.getItem("id") || "default_id");
+  const [userId] = useState(sessionStorage.getItem("id") || "null");
+  const [email] = useState(sessionStorage.getItem('email') || "null");
   const [nextJobId, setNextJobId] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [resourceLimits, setResourceLimits] = useState({
@@ -25,32 +25,45 @@ export default function JobsPage({ user }) {
     max_gpu: 0,
     max_memory: 0,
   });
-  // New state for resource context selection
   const [resourceContext, setResourceContext] = useState("user"); // "user" or "group"
   const [selectedGroupId, setSelectedGroupId] = useState("");
   const [userGroups, setUserGroups] = useState([]);
+  const [masterNodeIp, setMasterNodeIp] = useState(null);
 
   useEffect(() => {
-    fetchInitialData();
-    // Poll for job updates every 30 seconds
+    fetchMasterNodeIp();
     const interval = setInterval(fetchJobs, 30000);
     return () => clearInterval(interval); 
   }, []);
 
+  const fetchMasterNodeIp = async () => {
+    try {
+      const response = await axios.get(`${BACKEND_API_BASE_URL}/nodes/get-nodes-list`);
+      const nodes = response.data;
+      const masterNode = nodes.find(node => node.node_type === "master");
+      if (masterNode) {
+        setMasterNodeIp(masterNode.ip_address);
+      }
+    } catch (error) {
+      console.error("Failed to fetch master node IP:", error);
+    }
+  };
+
   const fetchInitialData = async () => {
+    if (!masterNodeIp) return;
+
     try {
       setIsLoading(true);
       const [jobsRes, nodesRes, groupsRes] = await Promise.all([
-        axios.get(`${MASTER_NODE_API_BASE_URL}/jobs`),
+        axios.get(`http://${masterNodeIp}:5000/jobs`),
         axios.get(`${BACKEND_API_BASE_URL}/nodes/get-nodes-list`),
-        axios.get(`${BACKEND_API_BASE_URL}/users/users/${userId}/groups`), // Fetch user's groups
+        axios.get(`${BACKEND_API_BASE_URL}/users/users/${userId}/groups`),
       ]);
 
       setJobs(jobsRes.data.jobs || []);
       setNodes(nodesRes.data.filter(node => node.node_type === "worker" && node.status === "active"));
       setUserGroups(groupsRes.data || []);
 
-      // Fetch initial resource limits (default to user)
       await fetchResourceLimits("user", userId);
 
       const fetchedJobs = jobsRes.data.jobs || [];
@@ -84,13 +97,21 @@ export default function JobsPage({ user }) {
   };
 
   const fetchJobs = async () => {
+    if (!masterNodeIp) return;
+
     try {
-      const jobsRes = await axios.get(`${MASTER_NODE_API_BASE_URL}/jobs`);
+      const jobsRes = await axios.get(`http://${masterNodeIp}:5000/jobs`);
       setJobs(jobsRes.data.jobs || []);
     } catch (error) {
       console.error("Failed to fetch jobs:", error);
     }
   };
+
+  useEffect(() => {
+    if (masterNodeIp) {
+      fetchInitialData();
+    }
+  }, [masterNodeIp]);
 
   const filterJobs = (state) => {
     return jobs.filter((job) => {
@@ -143,7 +164,6 @@ export default function JobsPage({ user }) {
       return;
     }
 
-    // Fetch resource limits based on selected context before validation
     await fetchResourceLimits(resourceContext, resourceContext === "user" ? userId : selectedGroupId);
 
     if (!validateResources()) return;
@@ -152,11 +172,12 @@ export default function JobsPage({ user }) {
       Job_id: nextJobId.toString(),
       Job_name: jobName,
       github_url: githubUrl,
-      user_name: username, // Always use user_id/username for submission tracking
+      user_name: username,
       node_id: selectedNodeId,
       cpu_request: parseInt(cpuRequest),
       gpu_request: parseInt(gpuRequest) || 0,
       memory_request: parseFloat(memoryRequest),
+      user_email: email,
     };
 
     try {
@@ -173,6 +194,8 @@ export default function JobsPage({ user }) {
       const workerUrl = `http://${selectedNode.ip_address}:5000/submit-job`;
       await axios.post(workerUrl, payload);
 
+      Swal.close();
+      
       showAlert("success", "Job Submitted", `Job "${jobName}" submitted successfully!`, () => {
         fetchInitialData();
       });
@@ -183,9 +206,10 @@ export default function JobsPage({ user }) {
       setCpuRequest("");
       setGpuRequest("");
       setMemoryRequest("");
-      setResourceContext("user"); // Reset to default
+      setResourceContext("user");
       setSelectedGroupId("");
     } catch (error) {
+      Swal.close();
       showAlert("error", "Submission Failed", error.response?.data?.message || error.message || "Something went wrong.");
     } finally {
       setIsLoading(false);
@@ -193,6 +217,8 @@ export default function JobsPage({ user }) {
   };
 
   const handleCancelJob = async (jobId) => {
+    if (!masterNodeIp) return;
+
     try {
       const confirmed = await showConfirm("Are you sure?", `Do you really want to cancel job '${jobId}'?`);
       if (!confirmed) return;
@@ -218,16 +244,43 @@ export default function JobsPage({ user }) {
   };
 
   const showAlert = (icon, title, text, callback) => {
-    alert(`${title}: ${text}`);
-    if (callback) callback();
+    Swal.fire({
+      icon: icon,
+      title: title,
+      text: text,
+      confirmButtonColor: '#1e3a8a',
+      confirmButtonText: 'OK'
+    }).then((result) => {
+      if (result.isConfirmed && callback) {
+        callback();
+      }
+    });
   };
 
-  const showConfirm = (title, text) => {
-    return window.confirm(`${title}\n${text}`);
+  const showConfirm = async (title, text) => {
+    const result = await Swal.fire({
+      title: title,
+      text: text,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonColor: '#1e3a8a',
+      cancelButtonColor: '#b91c1c',
+      confirmButtonText: 'Yes',
+      cancelButtonText: 'No'
+    });
+    return result.isConfirmed;
   };
 
   const showLoading = (title, text) => {
-    console.log(`Loading: ${title} - ${text}`);
+    Swal.fire({
+      title: title,
+      text: text,
+      allowOutsideClick: false,
+      allowEscapeKey: false,
+      didOpen: () => {
+        Swal.showLoading();
+      }
+    });
   };
 
   const getTabClass = (index) => {

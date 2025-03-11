@@ -10,7 +10,7 @@ export default function RemoteNodes() {
     useEffect(() => {
         async function fetchSavedNodes() {
             try {
-                const response = await axios.get(`{import.meta.env.VITE_BACKEND_API_BASE_URL}/nodes/get-nodes-list`);
+                const response = await axios.get(`${import.meta.env.VITE_BACKEND_API_BASE_URL}/nodes/get-nodes-list`);
                 const nodes = response.data;
 
                 if (nodes.length > 0) {

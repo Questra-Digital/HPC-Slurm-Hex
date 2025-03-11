@@ -68,7 +68,8 @@ export default function Settings() {
     const fetchUserData = async (userId) => {
         try {
             const response = await axios.get(`${import.meta.env.VITE_BACKEND_API_BASE_URL}/users/users`);
-            const userData = response.data.find(user => user.id === userId) || response.data[0];
+            const numericUserId = Number(userId);
+            const userData = response.data.find(user => user.id === numericUserId) || response.data[0];
             
             setProfile(prev => ({
                 ...prev,
@@ -77,7 +78,7 @@ export default function Settings() {
                 username: prev.username || userData.username,
                 role: prev.role || userData.role
             }));
-
+    
             setFormData(prev => ({
                 ...prev,
                 email: userData.email || "",

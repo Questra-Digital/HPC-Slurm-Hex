@@ -7,12 +7,12 @@ from apscheduler.schedulers.background import BackgroundScheduler
 import requests
 
 app = Flask(__name__)
-CORS(app) 
+CORS(app)  # Enable CORS for the entire application
 
 # Directory paths
 HOME_DIR = os.path.expanduser("~")
 JOBS_DIR = os.path.join(HOME_DIR, "jobs")
-MASTER_NODE_URL = "http://192.168.56.20:5000" 
+MASTER_NODE_URL = "http://192.168.56.20:5000"  # Adjust to your master node's IP
 
 # Function to check if a job is running by querying the master node
 def is_job_running(job_id):
@@ -55,8 +55,7 @@ def zip_all_jobs():
 
 # Start background scheduler
 scheduler = BackgroundScheduler()
-# Runs every 1 minutes
-scheduler.add_job(zip_all_jobs, 'interval', minutes=1)
+scheduler.add_job(zip_all_jobs, 'interval', minutes=1)  # Runs every 5 minutes
 scheduler.start()
 
 @app.route('/submit-job', methods=['POST'])
@@ -69,8 +68,10 @@ def submit_job():
     cpu_request = data.get('cpu_request')
     gpu_request = data.get('gpu_request', 0)
     memory_request = data.get('memory_request')
+    user_email = data.get('user_email')  # Get the email from payload
 
-    if not all([job_id, job_name, github_url, user_name, cpu_request, memory_request]):
+    # Updated required parameters check to include user_email
+    if not all([job_id, job_name, github_url, user_name, cpu_request, memory_request, user_email]):
         return jsonify({"error": "Missing required parameters"}), 400
 
     try:
@@ -89,6 +90,8 @@ def submit_job():
             f"--comment={user_name}",
             "--cpus-per-task", str(cpu_request),
             "--mem", f"{memory_request}G",
+            "--mail-user", user_email,          
+            "--mail-type", "BEGIN,END,FAIL"
         ]
         if gpu_request > 0:
             command.extend(["--gpus", str(gpu_request)])

@@ -5,6 +5,7 @@ import Swal from 'sweetalert2';
 
 
 const Login = ({ setUser }) => {
+  
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -21,6 +22,7 @@ const Login = ({ setUser }) => {
       sessionStorage.setItem('id', res.data.userId);
       sessionStorage.setItem('user_role', res.data.role);
       sessionStorage.setItem('username', res.data.name);
+      sessionStorage.setItem('email', email);
       setUser(res.data.name);
 
       Swal.fire({

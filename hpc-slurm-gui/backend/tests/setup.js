@@ -1,13 +1,13 @@
-const { Sequelize, DataTypes } = require("sequelize");
+process.env.NODE_ENV = 'test';
+process.env.JWT_SECRET = '5e18f55dc731e04ae901a488b87c33444f014d927bcfc751724687f8209cae86';
 
-const sequelize = new Sequelize({
-    dialect: "sqlite",
-    storage: "./database.sqlite",
-    logging: process.env.NODE_ENV === 'test' ? false : console.log  
-});
+const { Sequelize, DataTypes } = require('sequelize');
 
-// Models
-const User = sequelize.define("User", {
+// Use in-memory SQLite with logging disabled
+const sequelize = new Sequelize('sqlite::memory:', { logging: false });
+
+// Define models
+const TestUser = sequelize.define("User", {
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
     username: { type: DataTypes.STRING(50), allowNull: false, unique: true },
     email: { type: DataTypes.STRING(100), allowNull: false, unique: true },
@@ -20,26 +20,26 @@ const User = sequelize.define("User", {
     created_at: { type: DataTypes.DATE, defaultValue: Sequelize.NOW }
 }, { tableName: 'users' });
 
-const Group = sequelize.define("Group", {
+const TestGroup = sequelize.define("Group", {
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
     name: { type: DataTypes.STRING(50), allowNull: false, unique: true },
     created_at: { type: DataTypes.DATE, defaultValue: Sequelize.NOW }
 }, { tableName: 'groups' });
 
-const UserGroup = sequelize.define("UserGroup", {
+const TestUserGroup = sequelize.define("UserGroup", {
     user_id: { 
         type: DataTypes.INTEGER, 
-        references: { model: User, key: 'id' },
+        references: { model: TestUser, key: 'id' },
         primaryKey: true 
     },
     group_id: { 
         type: DataTypes.INTEGER, 
-        references: { model: Group, key: 'id' },
+        references: { model: TestGroup, key: 'id' },
         primaryKey: true 
     }
 }, { tableName: 'user_groups' });
 
-const Node = sequelize.define("Node", {
+const TestNode = sequelize.define("Node", {
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
     name: { type: DataTypes.STRING(100), allowNull: false, unique: true },
     ip_address: { type: DataTypes.STRING(45), allowNull: false, unique: true },
@@ -59,10 +59,10 @@ const Node = sequelize.define("Node", {
     created_at: { type: DataTypes.DATE, defaultValue: Sequelize.NOW },
 }, { tableName: "nodes" });
 
-const ResourceLimit = sequelize.define("ResourceLimit", {
+const TestResourceLimit = sequelize.define("ResourceLimit", {
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
-    user_id: { type: DataTypes.INTEGER, references: { model: User, key: 'id' }, allowNull: true },
-    group_id: { type: DataTypes.INTEGER, references: { model: Group, key: 'id' }, allowNull: true },
+    user_id: { type: DataTypes.INTEGER, references: { model: TestUser, key: 'id' }, allowNull: true },
+    group_id: { type: DataTypes.INTEGER, references: { model: TestGroup, key: 'id' }, allowNull: true },
     max_cpu: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
     max_gpu: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
     max_memory: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
@@ -77,12 +77,33 @@ const ResourceLimit = sequelize.define("ResourceLimit", {
 });
 
 // Relationships
-User.belongsToMany(Group, { through: UserGroup, foreignKey: 'user_id' });
-Group.belongsToMany(User, { through: UserGroup, foreignKey: 'group_id' });
-User.hasOne(ResourceLimit, { foreignKey: 'user_id' });
-Group.hasOne(ResourceLimit, { foreignKey: 'group_id' });
+TestUser.belongsToMany(TestGroup, { through: TestUserGroup, foreignKey: 'user_id' });
+TestGroup.belongsToMany(TestUser, { through: TestUserGroup, foreignKey: 'group_id' });
+TestUser.hasOne(TestResourceLimit, { foreignKey: 'user_id' });
+TestGroup.hasOne(TestResourceLimit, { foreignKey: 'group_id' });
 
-// Sync database
-sequelize.sync().then(() => console.log("Database & tables created!"));
+// Export models for tests
+global.testDb = {
+    sequelize,
+    User: TestUser,
+    Group: TestGroup,
+    UserGroup: TestUserGroup,
+    Node: TestNode,
+    ResourceLimit: TestResourceLimit
+};
 
-module.exports = { sequelize, User, Group, UserGroup, Node, ResourceLimit };
+// Apply global mock for all tests
+jest.mock('../config/db', () => global.testDb);
+
+// Setup and teardown
+beforeAll(async () => {
+    await sequelize.sync({ force: true });
+});
+
+beforeEach(async () => {
+    await sequelize.sync({ force: true }); // Reset DB for each test
+});
+
+afterAll(async () => {
+    await sequelize.close();
+});

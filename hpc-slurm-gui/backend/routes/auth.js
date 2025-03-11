@@ -3,9 +3,12 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const { User } = require("../config/db");
 const { Op } = require("sequelize");
+const crypto = require("crypto"); 
 const router = express.Router();
 
-const JWT_SECRET = process.env.JWT_SECRET || "secret";
+// Generate a random JWT secret (32 bytes as a hex string)
+const JWT_SECRET = crypto.randomBytes(32).toString('hex');
+// const JWT_SECRET = process.env.JWT_SECRET
 
 router.get("/check-admin", async (req, res) => {
     const admin = await User.findOne({ where: { role: "admin" } });
@@ -23,10 +26,10 @@ router.post("/setup-admin", async (req, res) => {
         }
 
         // Validate Password
-        const passwordRegex = /^(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+        const passwordRegex = /^(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{6,}$/;
         if (!passwordRegex.test(password)) {
             return res.status(400).json({
-                message: "Password must be at least 8 characters, include 1 uppercase, 1 number, and 1 special character."
+                message: "Password must be at least 6 characters, include 1 uppercase, 1 number, and 1 special character."
             });
         }
 
