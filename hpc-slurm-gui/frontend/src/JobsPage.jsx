@@ -234,22 +234,34 @@ export default function JobsPage({ user }) {
 
   const handleCancelJob = async (jobId) => {
     if (!masterNodeIp) return;
-
+  
     try {
       const confirmed = await showConfirm("Are you sure?", `Do you really want to cancel job '${jobId}'?`);
       if (!confirmed) return;
-
+  
       setIsLoading(true);
-      const response = await axios.post(`http://192.168.56.21:5000/cancel-job`, { Job_id: jobId });
+  
+      // Step 1: Fetch the node IP from the master node
+      const jobIpRes = await axios.get(`http://${masterNodeIp}:5000/job-ip/${jobId}`);
+      const nodeIp = jobIpRes.data?.nodes?.[0]?.ip;
+  
+      if (!nodeIp) {
+        throw new Error("Unable to determine job node IP.");
+      }
+  
+      // Step 2: Use the returned IP to send the cancel request
+      const response = await axios.post(`http://${nodeIp}:5000/cancel-job`, { Job_id: jobId });
+  
       showAlert("success", "Job Canceled", response.data.message, () => {
         fetchInitialData();
       });
     } catch (error) {
-      showAlert("error", "Cancellation Failed", error.response?.data?.message || "Something went wrong.");
+      showAlert("error", "Cancellation Failed", error.response?.data?.message || error.message || "Something went wrong.");
     } finally {
       setIsLoading(false);
     }
   };
+  
 
   const handleDownload = (downloadLink) => {
     if (downloadLink) {
@@ -454,7 +466,7 @@ export default function JobsPage({ user }) {
                     <th>Start</th>
                     <th>Resources</th>
                     <th>State</th>
-                    {selectedTab !== 0 && <th>Download</th>}
+                    {selectedTab === 1 && <th>Download</th>}
                     {selectedTab === 0 && <th>Cancel</th>}
                   </tr>
                 </thead>
@@ -471,7 +483,7 @@ export default function JobsPage({ user }) {
                           {job.state}
                         </span>
                       </td>
-                      {selectedTab !== 0 && (
+                      {selectedTab === 1 && (
                         <td>
                           <button
                             className={`action-btn download-btn ${!job.download_link ? "disabled-btn" : ""}`}
