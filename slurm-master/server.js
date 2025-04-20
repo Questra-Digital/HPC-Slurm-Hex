@@ -7,19 +7,15 @@ const redis = require('redis');
 const app = express();
 const port = 5000;
 
-// Redis client setup with configurable options
 const REDIS_HOST = process.env.REDIS_HOST || 'localhost';
 const REDIS_PORT = process.env.REDIS_PORT || 6379;
 const redisClient = redis.createClient({
   url: `redis://${REDIS_HOST}:${REDIS_PORT}`,
-  // Optional: Add password if Redis is configured with one
-  // password: process.env.REDIS_PASSWORD || undefined,
 });
 
 redisClient.on('error', (err) => console.log('Redis Client Error:', err));
 redisClient.on('connect', () => console.log('Connected to Redis'));
 
-// Connect to Redis (async operation)
 let redisConnected = false;
 (async () => {
   try {
@@ -30,10 +26,9 @@ let redisConnected = false;
   }
 })();
 
-// Enable CORS
+
 app.use(cors());
 
-// Helper function to format date to a more readable string
 const formatDate = (dateString) => {
   const date = new Date(dateString);
   const options = { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' };
@@ -69,10 +64,20 @@ const fetchJobComment = (jobId, callback) => {
   });
 };
 
+const getNodeIP = (nodeName) => {
+  try {
+    const ip = execSync(`getent hosts ${nodeName}`).toString().trim().split(' ')[0];
+    return ip;
+  } catch (err) {
+    console.error(`Failed to resolve IP for node ${nodeName}:`, err.message);
+    return '127.0.0.1'; // Fallback
+  }
+};
+
 // Function to fetch jobs from sacct and cache in Redis
 const fetchAndCacheJobs = async () => {
   return new Promise((resolve, reject) => {
-    exec('sacct --starttime=2024-01-01 --format=JobID,JobName,Start,End,Partition,AllocCPUS,AllocGRES,ReqMem,State,ExitCode,Comment -p', async (error, stdout, stderr) => {
+    exec('sacct --starttime=2024-01-01 --format=JobID,JobName,Start,End,Partition,AllocCPUS,AllocGRES,ReqMem,State,ExitCode,Comment,NodeList -p', async (error, stdout, stderr) => {
       if (error) {
         return reject(stderr || 'Failed to get job list');
       }
@@ -87,8 +92,13 @@ const fetchAndCacheJobs = async () => {
 
       lines.slice(1).forEach(line => {
         const fields = line.split('|').map(field => field.trim());
-        if (fields.length >= 11) {
+        if (fields.length >= 12) {
           if (!fields[1].includes('.batch')) {
+
+            const nodeName = fields[11] || null;
+            console.log(`${fields[0]} = ${nodeName}`);
+            const nodeIP = nodeName ? getNodeIP(nodeName) : '127.0.0.1';
+
             if (currentJob) jobs.push(currentJob);
             currentJob = {
               jobId: fields[0],
@@ -102,7 +112,8 @@ const fetchAndCacheJobs = async () => {
               state: fields[8],
               exitCode: fields[9],
               userName: fields[10] || null,
-              download_link: `http://192.168.56.21:5000/download/${fields[0]}.zip`,
+              node: fields[11] || null,
+              download_link: `http://${nodeIP}:5000/download/${fields[0]}.zip`,
             };
           } else if (currentJob) {
             currentJob.batchJob = {
@@ -112,9 +123,10 @@ const fetchAndCacheJobs = async () => {
               end: formatDate(fields[3]),
               state: fields[8],
               exitCode: fields[9],
+              node: fields[11] || null,
             };
           }
-        }
+        }        
       });
 
       if (currentJob) jobs.push(currentJob);
@@ -130,23 +142,22 @@ const fetchAndCacheJobs = async () => {
         });
       }));
 
-      // Cache the jobs in Redis with a TTL of 60 seconds
-      await redisClient.setEx('jobs', 15, JSON.stringify({ jobs }));
+      // Cache the jobs in Redis with a TTL of 15 seconds
+      await redisClient.setEx('jobs',3, JSON.stringify({ jobs }));
       resolve(jobs);
     });
   });
 };
 
-// Route to get job list with CPU, GPU, and RAM (using Redis cache)
+
 app.get('/jobs', async (req, res) => {
   try {
-    // Check Redis cache first
+    
     const cachedJobs = await redisClient.get('jobs');
     if (cachedJobs) {
       return res.json(JSON.parse(cachedJobs));
     }
 
-    // If not in cache, fetch from sacct and cache it
     const jobs = await fetchAndCacheJobs();
     res.json({ jobs });
   } catch (error) {
@@ -154,7 +165,6 @@ app.get('/jobs', async (req, res) => {
   }
 });
 
-// New endpoint to get status of a specific job
 app.get('/job-status/:jobId', (req, res) => {
   const jobId = req.params.jobId;
   exec(`sacct -j ${jobId} --format=State --noheader`, (error, stdout, stderr) => {
@@ -166,7 +176,6 @@ app.get('/job-status/:jobId', (req, res) => {
   });
 });
 
-// Route to get the predicted next job ID
 app.get('/next-job-id', (req, res) => {
   exec('sacct --starttime=2024-01-01 --format=JobID -p', (error, stdout, stderr) => {
     if (error) {
@@ -188,7 +197,7 @@ app.get('/next-job-id', (req, res) => {
   });
 });
 
-// Function to run shell commands synchronously
+
 function runCommand(command) {
   try {
     return execSync(command).toString().trim();
@@ -230,7 +239,6 @@ app.post('/cancel-job', (req, res) => {
 });
 
 
-// Route to check system connectivity and resources
 app.get('/connect', (req, res) => {
   try {
     const ip = runCommand('hostname -I')?.split(' ')[0] || 'Unknown';
@@ -250,7 +258,6 @@ app.get('/connect', (req, res) => {
   }
 });
 
-// Start the server
 app.listen(port, () => {
   console.log(`Slurm API server running at http://localhost:${port}`);
 });
