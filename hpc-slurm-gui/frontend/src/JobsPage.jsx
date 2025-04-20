@@ -13,7 +13,7 @@ export default function JobsPage({ user }) {
   const [selectedNodeId, setSelectedNodeId] = useState("");
   const [cpuRequest, setCpuRequest] = useState("");
   const [gpuRequest, setGpuRequest] = useState("");
-  const [memoryRequest, setMemoryRequest] = useState(""); // In GB
+  const [memoryRequest, setMemoryRequest] = useState(""); 
   const [username] = useState(sessionStorage.getItem("username") || "null");
   const [userRole] = useState(sessionStorage.getItem("user_role") || "user");
   const [userId] = useState(sessionStorage.getItem("id") || "null");
@@ -25,16 +25,27 @@ export default function JobsPage({ user }) {
     max_gpu: 0,
     max_memory: 0,
   });
-  const [resourceContext, setResourceContext] = useState("user"); // "user" or "group"
+  const [resourceContext, setResourceContext] = useState("user");
   const [selectedGroupId, setSelectedGroupId] = useState("");
   const [userGroups, setUserGroups] = useState([]);
   const [masterNodeIp, setMasterNodeIp] = useState(null);
 
   useEffect(() => {
     fetchMasterNodeIp();
-    const interval = setInterval(fetchJobs, 30000);
-    return () => clearInterval(interval); 
   }, []);
+
+  useEffect(() => {
+    if (!masterNodeIp) return;
+  
+    const interval = setInterval(() => {
+      fetchJobs();
+    }, 3000); // every 3 seconds
+  
+    // Initial fetch
+    fetchJobs();
+  
+    return () => clearInterval(interval);
+  }, [masterNodeIp]);
 
   const fetchMasterNodeIp = async () => {
     try {
@@ -48,7 +59,7 @@ export default function JobsPage({ user }) {
       console.error("Failed to fetch master node IP:", error);
     }
   };
-
+  
   const fetchInitialData = async () => {
     if (!masterNodeIp) return;
 
@@ -98,10 +109,15 @@ export default function JobsPage({ user }) {
 
   const fetchJobs = async () => {
     if (!masterNodeIp) return;
-
+  
     try {
       const jobsRes = await axios.get(`http://${masterNodeIp}:5000/jobs`);
-      setJobs(jobsRes.data.jobs || []);
+      const newJobs = jobsRes.data.jobs || [];
+  
+      // Only update state if there's a change in job count
+      if (newJobs.length !== jobs.length) {
+        setJobs(newJobs);
+      }
     } catch (error) {
       console.error("Failed to fetch jobs:", error);
     }
