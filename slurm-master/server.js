@@ -26,7 +26,6 @@ let redisConnected = false;
   }
 })();
 
-
 app.use(cors());
 
 const formatDate = (dateString) => {
@@ -96,7 +95,6 @@ const fetchAndCacheJobs = async () => {
           if (!fields[1].includes('.batch')) {
 
             const nodeName = fields[11] || null;
-            console.log(`${fields[0]} = ${nodeName}`);
             const nodeIP = nodeName ? getNodeIP(nodeName) : '127.0.0.1';
 
             if (currentJob) jobs.push(currentJob);
@@ -142,7 +140,7 @@ const fetchAndCacheJobs = async () => {
         });
       }));
 
-      // Cache the jobs in Redis with a TTL of 15 seconds
+      // Cache the jobs in Redis with a TTL of 3 seconds
       await redisClient.setEx('jobs',3, JSON.stringify({ jobs }));
       resolve(jobs);
     });
@@ -235,6 +233,30 @@ app.post('/cancel-job', (req, res) => {
   
   scancel.on('error', (err) => {
     return res.status(500).json({ error: err.toString() });
+  });
+});
+
+// New endpoint to get the IP address for a job's node list
+app.get('/job-ip/:jobId', (req, res) => {
+  const jobId = req.params.jobId;
+
+  exec(`sacct -j ${jobId} --format=NodeList --noheader`, (error, stdout, stderr) => {
+    if (error) {
+      return res.status(500).json({ error: stderr || 'Failed to get node list' });
+    }
+
+    const nodeNames = stdout
+      .split('\n')
+      .map(line => line.trim())
+      .filter(line => line.length > 0);
+
+    const uniqueNodeNames = [...new Set(nodeNames)];
+    const ipAddresses = uniqueNodeNames.map(node => ({
+      node,
+      ip: getNodeIP(node),
+    }));
+
+    res.json({ jobId, nodes: ipAddresses });
   });
 });
 
