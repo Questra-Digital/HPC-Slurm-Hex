@@ -5,16 +5,17 @@ const { execSync } = require('child_process');
 const os = require('os');
 const redis = require('redis');
 const app = express();
-const port = 5000;
+const port = 5050;
 
-const REDIS_HOST = process.env.REDIS_HOST || 'localhost';
+const REDIS_HOST = process.env.REDIS_HOST || 'redis';
 const REDIS_PORT = process.env.REDIS_PORT || 6379;
+
 const redisClient = redis.createClient({
   url: `redis://${REDIS_HOST}:${REDIS_PORT}`,
 });
 
 redisClient.on('error', (err) => console.log('Redis Client Error:', err));
-redisClient.on('connect', () => console.log('Connected to Redis'));
+redisClient.on('connect', () => console.log(`Connected to Redis on port ${REDIS_PORT}`));
 
 let redisConnected = false;
 (async () => {
@@ -111,7 +112,7 @@ const fetchAndCacheJobs = async () => {
               exitCode: fields[9],
               userName: fields[10] || null,
               node: fields[11] || null,
-              download_link: `http://${nodeIP}:5000/download/${fields[0]}.zip`,
+              download_link: `http://${nodeIP}:5050/download/${fields[0]}.zip`,
             };
           } else if (currentJob) {
             currentJob.batchJob = {
@@ -131,6 +132,10 @@ const fetchAndCacheJobs = async () => {
 
       const runningJobs = jobs.filter(job => job.state === 'RUNNING');
       await Promise.all(runningJobs.map(job => {
+
+        // Skip jobs with a dot in the name
+        if (job.jobName.includes('.')) return Promise.resolve();
+
         return new Promise((resolve) => {
           fetchJobComment(job.jobId, (err, comment) => {
             if (err) console.log(`Error fetching comment for ${job.jobId}: ${err}`);
@@ -280,6 +285,6 @@ app.get('/connect', (req, res) => {
   }
 });
 
-app.listen(port, () => {
-  console.log(`Slurm API server running at http://localhost:${port}`);
+app.listen(port, '0.0.0.0', () => {
+  console.log(`Slurm API server running at http://0.0.0.0:${port}`);
 });

@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  backend:
+    image: jawad02/hpc-slurm-backend
+    container_name: hpc-slurm-backend
+    ports:
+      - "5050:5050"
+    depends_on:
+      - frontend
+    restart: always
+    networks:
+      - slurm-hpc-network
+
+  frontend:
+    image: jawad02/hpc-slurm-frontend
+    container_name: hpc-slurm-frontend
+    ports:
+      - "5051:5051"
+    restart: always
+    networks:
+      - slurm-hpc-network
+
+networks:
+  slurm-hpc-network:
+    driver: bridge

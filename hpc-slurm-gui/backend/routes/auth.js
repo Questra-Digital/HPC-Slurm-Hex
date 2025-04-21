@@ -6,8 +6,9 @@ const { Op } = require("sequelize");
 const crypto = require("crypto"); 
 const router = express.Router();
 
-// Generate a random JWT secret (32 bytes as a hex string)
+
 const JWT_SECRET = crypto.randomBytes(32).toString('hex');
+// Uncomment while testing
 // const JWT_SECRET = process.env.JWT_SECRET
 
 router.get("/check-admin", async (req, res) => {
@@ -19,13 +20,13 @@ router.post("/setup-admin", async (req, res) => {
     try {
         const { email, password } = req.body;
 
-        // Validate Email
+       
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(email)) {
             return res.status(400).json({ message: "Invalid email format." });
         }
 
-        // Validate Password
+     
         const passwordRegex = /^(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{6,}$/;
         if (!passwordRegex.test(password)) {
             return res.status(400).json({
@@ -33,14 +34,14 @@ router.post("/setup-admin", async (req, res) => {
             });
         }
 
-        // Check if Admin Already Exists
+       
         const existingAdmin = await User.findOne({ where: { role: "admin" } });
         if (existingAdmin) return res.status(400).json({ message: "Admin already exists." });
 
-        // Hash Password
+       
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        // Create Admin User
+       
         await User.create({ 
             username: "admin",
             email, 
@@ -59,7 +60,7 @@ router.post("/login", async (req, res) => {
     try {
         const { email, password } = req.body;
 
-        // Find user by email OR username
+        
         const user = await User.findOne({
             where: {
                 [Op.or]: [{ email }, { username: email }]
@@ -76,7 +77,7 @@ router.post("/login", async (req, res) => {
             { expiresIn: "1h" }
         );
 
-        // Include userId in the response
+        
         res.json({ token, userId: user.id, name: user.username, role: user.role });
     } catch (error) {
         res.status(500).json({ message: "Error logging in", error });

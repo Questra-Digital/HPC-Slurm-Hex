@@ -66,7 +66,7 @@ export default function JobsPage({ user }) {
     try {
       setIsLoading(true);
       const [jobsRes, nodesRes, groupsRes] = await Promise.all([
-        axios.get(`http://${masterNodeIp}:5000/jobs`),
+        axios.get(`http://${masterNodeIp}:5050/jobs`),
         axios.get(`${BACKEND_API_BASE_URL}/nodes/get-nodes-list`),
         axios.get(`${BACKEND_API_BASE_URL}/users/users/${userId}/groups`),
       ]);
@@ -111,7 +111,7 @@ export default function JobsPage({ user }) {
     if (!masterNodeIp) return;
   
     try {
-      const jobsRes = await axios.get(`http://${masterNodeIp}:5000/jobs`);
+      const jobsRes = await axios.get(`http://${masterNodeIp}:5050/jobs`);
       const newJobs = jobsRes.data.jobs || [];
   
       // Only update state if there's a change in job count
@@ -207,7 +207,7 @@ export default function JobsPage({ user }) {
         throw new Error("Selected node not found");
       }
 
-      const workerUrl = `http://${selectedNode.ip_address}:5000/submit-job`;
+      const workerUrl = `http://${selectedNode.ip_address}:5050/submit-job`;
       await axios.post(workerUrl, payload);
 
       Swal.close();
@@ -242,7 +242,7 @@ export default function JobsPage({ user }) {
       setIsLoading(true);
   
       // Step 1: Fetch the node IP from the master node
-      const jobIpRes = await axios.get(`http://${masterNodeIp}:5000/job-ip/${jobId}`);
+      const jobIpRes = await axios.get(`http://${masterNodeIp}:5050/job-ip/${jobId}`);
       const nodeIp = jobIpRes.data?.nodes?.[0]?.ip;
   
       if (!nodeIp) {
@@ -250,7 +250,7 @@ export default function JobsPage({ user }) {
       }
   
       // Step 2: Use the returned IP to send the cancel request
-      const response = await axios.post(`http://${nodeIp}:5000/cancel-job`, { Job_id: jobId });
+      const response = await axios.post(`http://${nodeIp}:5050/cancel-job`, { Job_id: jobId });
   
       showAlert("success", "Job Canceled", response.data.message, () => {
         fetchInitialData();
@@ -749,6 +749,11 @@ export default function JobsPage({ user }) {
         .status-failed {
           background-color: #fee2e2;
           color: #b91c1c;
+        }
+
+        .status-other {
+          background-color: #fee2e2;
+          color: #5b21b6;
         }
         
         .action-btn {

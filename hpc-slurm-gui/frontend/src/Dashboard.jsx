@@ -45,7 +45,7 @@ export default function Dashboard({ setActiveMenuItem }) {
     if (!masterNodeIp) return; // Wait until we have the master node IP
     
     try {
-      const response = await axios.get(`http://${masterNodeIp}:5000/jobs`);
+      const response = await axios.get(`http://${masterNodeIp}:5050/jobs`);
       const allJobs = response.data.jobs || [];
       
       const filteredJobs = filterJobs(allJobs);

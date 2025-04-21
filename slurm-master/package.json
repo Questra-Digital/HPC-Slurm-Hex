@@ -12,6 +12,7 @@
   "dependencies": {
     "axios": "^0.27.2",
     "cors": "^2.8.5",
-    "express": "^4.21.1"
+    "express": "^4.21.1",
+    "redis": "^4.6.7"
   }
 }

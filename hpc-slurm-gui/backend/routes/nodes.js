@@ -11,7 +11,7 @@ router.post("/connect", async (req, res) => {
     }
 
     try {
-        const response = await axios.get(`http://${ip}:5000/connect`, { timeout: 5000 });
+        const response = await axios.get(`http://${ip}:5050/connect`, { timeout: 5000 });
 
         if (response.status !== 200 || !response.data || response.data.status !== "active") {
             return res.status(500).json({ status: "Failed", message: "Node health check failed" });

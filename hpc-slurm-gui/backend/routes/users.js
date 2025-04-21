@@ -3,7 +3,7 @@ const bcrypt = require("bcryptjs");
 const { User, Group, UserGroup, ResourceLimit } = require("../config/db");
 const router = express.Router();
 
-// User routes
+
 router.get("/users", async (req, res) => {
     try {
         const users = await User.findAll({
@@ -60,7 +60,7 @@ router.delete("/users/:id", async (req, res) => {
     }
 });
 
-// Group routes
+
 router.get("/groups", async (req, res) => {
     try {
         const groups = await Group.findAll();
@@ -130,7 +130,6 @@ router.delete("/groups/:id", async (req, res) => {
     }
 });
 
-// User-Group relationship routes
 router.get("/user-groups", async (req, res) => {
     try {
         const userGroups = await UserGroup.findAll();
