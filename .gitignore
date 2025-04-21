@@ -130,6 +130,4 @@ dist
 
 
 #custom
-docker-compose
-Dockerfile
-.vagrant
+.vagrant/
