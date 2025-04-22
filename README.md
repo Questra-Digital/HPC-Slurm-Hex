@@ -63,5 +63,4 @@ HPC-Slurm-Hex consists of three modules:
 - Manage users, groups, resources, and jobs via the sidebar.
 
 
-##
 ## Contributions welcome! Feel free to open issues or PRs.
