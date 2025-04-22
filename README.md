@@ -62,5 +62,6 @@ HPC-Slurm-Hex consists of three modules:
   - Add Worker nodes’ public IPs (specify quantity, e.g., 2) and connect.
 - Manage users, groups, resources, and jobs via the sidebar.
 
+
 ##
 ## Contributions welcome! Feel free to open issues or PRs.
