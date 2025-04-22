@@ -18,7 +18,7 @@ HPC-Slurm-Hex consists of three modules:
 - **HPC-Slurm-Worker**: Worker nodes for job execution (Python).
 - **HPC-Slurm-Frontend**: Web interface for admin/user interaction (Docker).
 
-\[High-Level Architecture Diagram Placeholder\]
+[![Github All Releases](assets/arch.jpg)]
 
 ## Quick Setup Guide
 
