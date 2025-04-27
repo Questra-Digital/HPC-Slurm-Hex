@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import Swal from 'sweetalert2';
 
@@ -10,6 +10,9 @@ export default function JobsPage({ user }) {
   const [selectedTab, setSelectedTab] = useState(0);
   const [jobName, setJobName] = useState("");
   const [githubUrl, setGithubUrl] = useState("");
+  const [sourceType, setSourceType] = useState("github"); // Default to GitHub
+  const [source, setSource] = useState(""); // Stores GitHub URL or file path
+  const [selectedFiles, setSelectedFiles] = useState([]); // Stores selected files
   const [selectedNodeId, setSelectedNodeId] = useState("");
   const [cpuRequest, setCpuRequest] = useState("");
   const [gpuRequest, setGpuRequest] = useState("");
@@ -30,6 +33,15 @@ export default function JobsPage({ user }) {
   const [userGroups, setUserGroups] = useState([]);
   const [masterNodeIp, setMasterNodeIp] = useState(null);
 
+  const fileInputRef = useRef(null);
+
+  // Handle files selected from file picker
+  const handleFilesChange = (e) => {
+    const files = Array.from(e.target.files);
+    setSelectedFiles(files);
+    setSource(files.length > 0 ? files[0].name : "");
+  };
+
   useEffect(() => {
     fetchMasterNodeIp();
   }, []);
@@ -41,7 +53,6 @@ export default function JobsPage({ user }) {
       fetchJobs();
     }, 3000); // every 3 seconds
   
-    // Initial fetch
     fetchJobs();
   
     return () => clearInterval(interval);
@@ -114,7 +125,6 @@ export default function JobsPage({ user }) {
       const jobsRes = await axios.get(`http://${masterNodeIp}:5050/jobs`);
       const newJobs = jobsRes.data.jobs || [];
   
-      // Only update state if there's a change in job count
       if (newJobs.length !== jobs.length) {
         setJobs(newJobs);
       }
@@ -170,7 +180,7 @@ export default function JobsPage({ user }) {
   };
 
   const handleSubmitJob = async () => {
-    if (!jobName || !githubUrl || !selectedNodeId || !cpuRequest || !memoryRequest) {
+    if (!jobName || !source || !selectedNodeId || !cpuRequest || !memoryRequest) {
       showAlert("warning", "Incomplete Form", "Please fill out all required fields.");
       return;
     }
@@ -184,10 +194,52 @@ export default function JobsPage({ user }) {
 
     if (!validateResources()) return;
 
+    let downloadUrl;
+
+    if (sourceType === "github") {
+      downloadUrl = source; // Use the GitHub URL directly
+    } else {
+      // Handle file upload for folder source type
+      if (selectedFiles.length === 0) {
+        showAlert("warning", "No Files Selected", "Please select at least one file to upload.");
+        return;
+      }
+
+      try {
+        setIsLoading(true);
+        showLoading("Uploading File...", "Please wait while the file is being uploaded");
+
+        const formData = new FormData();
+        selectedFiles.forEach((file, index) => {
+          formData.append(`file${index}`, file);
+        });
+
+        // Call backend endpoint to upload file via SFTP
+        const uploadResponse = await axios.post(`${BACKEND_API_BASE_URL}/jobs/upload-ftp`, formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        });
+
+        downloadUrl = uploadResponse.data.download_url;
+
+        if (!downloadUrl) {
+          throw new Error("Failed to get download URL from server.");
+        }
+
+        Swal.close();
+      } catch (error) {
+        Swal.close();
+        showAlert("error", "File Upload Failed", error.response?.data?.message || error.message || "Failed to upload file.");
+        setIsLoading(false);
+        return;
+      }
+    }
+
     const payload = {
       Job_id: nextJobId.toString(),
       Job_name: jobName,
-      github_url: githubUrl,
+      github_url: downloadUrl, // Use download URL for both GitHub and file uploads
       user_name: username,
       node_id: selectedNodeId,
       cpu_request: parseInt(cpuRequest),
@@ -197,8 +249,7 @@ export default function JobsPage({ user }) {
     };
 
     try {
-      setIsLoading(true);
-      showLoading("Please wait...", "Submitting Job");
+      showLoading("Submitting Job...", "Please wait");
 
       const nodeResponse = await axios.get(`${BACKEND_API_BASE_URL}/nodes/get-nodes-list`);
       const selectedNode = nodeResponse.data.find(node => node.id === parseInt(selectedNodeId));
@@ -217,13 +268,17 @@ export default function JobsPage({ user }) {
       });
 
       setJobName("");
-      setGithubUrl("");
+      setSource("");
+      setSelectedFiles([]);
       setSelectedNodeId("");
       setCpuRequest("");
       setGpuRequest("");
       setMemoryRequest("");
       setResourceContext("user");
       setSelectedGroupId("");
+      if (fileInputRef.current) {
+        fileInputRef.current.value = null; // Clear file input
+      }
     } catch (error) {
       Swal.close();
       showAlert("error", "Submission Failed", error.response?.data?.message || error.message || "Something went wrong.");
@@ -241,7 +296,6 @@ export default function JobsPage({ user }) {
   
       setIsLoading(true);
   
-      // Step 1: Fetch the node IP from the master node
       const jobIpRes = await axios.get(`http://${masterNodeIp}:5050/job-ip/${jobId}`);
       const nodeIp = jobIpRes.data?.nodes?.[0]?.ip;
   
@@ -249,7 +303,6 @@ export default function JobsPage({ user }) {
         throw new Error("Unable to determine job node IP.");
       }
   
-      // Step 2: Use the returned IP to send the cancel request
       const response = await axios.post(`http://${nodeIp}:5050/cancel-job`, { Job_id: jobId });
   
       showAlert("success", "Job Canceled", response.data.message, () => {
@@ -324,7 +377,6 @@ export default function JobsPage({ user }) {
         </div>
 
         <div className="content-container">
-          {/* Submit New Job Section */}
           <div className="section job-form-section">
             <h2>Submit New Job</h2>
             <div className="job-form">
@@ -339,15 +391,71 @@ export default function JobsPage({ user }) {
                 />
               </div>
               <div className="input-group">
-                <label htmlFor="github-url">GitHub Link</label>
-                <input
-                  id="github-url"
-                  type="text"
-                  placeholder="Enter GitHub repository URL"
-                  value={githubUrl}
-                  onChange={(e) => setGithubUrl(e.target.value)}
-                />
+                <label>Source Type</label>
+                <div className="flex space-x-4">
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="source-type"
+                      value="github"
+                      checked={sourceType === "github"}
+                      onChange={() => {
+                        setSourceType("github");
+                        setSource("");
+                        setSelectedFiles([]);
+                        if (fileInputRef.current) {
+                          fileInputRef.current.value = null;
+                        }
+                      }}
+                    />
+                    <span className="ml-2">GitHub URL</span>
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="source-type"
+                      value="folder"
+                      checked={sourceType === "folder"}
+                      onChange={() => {
+                        setSourceType("folder");
+                        setSource("");
+                        setSelectedFiles([]);
+                        if (fileInputRef.current) {
+                          fileInputRef.current.value = null;
+                        }
+                      }}
+                    />
+                    <span className="ml-2">Upload File</span>
+                  </label>
+                </div>
               </div>
+              {sourceType === "github" ? (
+                <div className="input-group">
+                  <label htmlFor="github-url">GitHub Link</label>
+                  <input
+                    id="github-url"
+                    type="text"
+                    placeholder="Enter GitHub repository URL"
+                    value={source}
+                    onChange={(e) => setSource(e.target.value)}
+                  />
+                </div>
+              ) : (
+                <div className="input-group">
+                  <label htmlFor="file-upload">Upload Files</label>
+                  <input
+                    id="file-upload"
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFilesChange}
+                    multiple
+                    className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                  />
+                  {source && (
+                    <p className="mt-2 text-sm text-gray-600">Selected: {source}</p>
+                  )}
+                </div>
+              )}
               <div className="input-group">
                 <label htmlFor="node-select">Select Node</label>
                 <select
@@ -446,7 +554,6 @@ export default function JobsPage({ user }) {
             </div>
           </div>
 
-          {/* Jobs List Section */}
           <div className="section jobs-list-section">
             <h2>Jobs Status</h2>
             <div className="tabs-container">

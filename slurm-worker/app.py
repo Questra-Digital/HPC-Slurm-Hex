@@ -5,9 +5,14 @@ import subprocess
 import shutil
 from apscheduler.schedulers.background import BackgroundScheduler
 import requests
+import uuid
 
 app = Flask(__name__)
 CORS(app) 
+
+# Declare global variables for FTP credentials
+FTP_USER = "u604307358"
+FTP_PASSWORD = "PassWord$2024"
 
 HOME_DIR = os.path.expanduser("~")
 JOBS_DIR = os.path.join(HOME_DIR, "jobs")
@@ -23,7 +28,6 @@ def is_job_running(job_id):
             text=True,
             check=True
         )
-        # Extract JobState using AWK-style processing
         for line in result.stdout.splitlines():
             if "JobState=" in line:
                 job_state = line.split("JobState=")[1].split()[0]
@@ -45,11 +49,9 @@ def zip_all_jobs():
             job_folder = os.path.join(JOBS_DIR, job_id)
             if os.path.isdir(job_folder):
                 zip_filename = f"{job_id}.zip"
-                # Skip zipping if the job is still running
                 if is_job_running(job_id):
                     print(f"Skipping {job_id} - still running")
                     continue
-                # Re-zip if folder is newer than the zip or zip doesn't exist
                 if not os.path.exists(zip_filename) or os.path.getmtime(job_folder) > os.path.getmtime(zip_filename):
                     subprocess.run(
                         ["zip", "-r", zip_filename, job_id],
@@ -78,18 +80,39 @@ def submit_job():
     memory_request = data.get('memory_request')
     user_email = data.get('user_email') 
 
-    
     if not all([job_id, job_name, github_url, user_name, cpu_request, memory_request, user_email]):
         return jsonify({"error": "Missing required parameters"}), 400
 
     try:
         os.makedirs(JOBS_DIR, exist_ok=True)
         job_folder = os.path.join(JOBS_DIR, job_id)
-        
+
         if os.path.exists(job_folder):
             shutil.rmtree(job_folder)
+
+        if github_url.endswith(".zip"):
+            random_uuid = str(uuid.uuid4())
+            zip_path = os.path.join(JOBS_DIR, f"{random_uuid}.zip")
+
+            if github_url.startswith("ftp://"):
+                # Use global FTP credentials
+                subprocess.run([
+                    "wget", 
+                    "--ftp-user", FTP_USER,
+                    "--ftp-password", FTP_PASSWORD,
+                    github_url, 
+                    "-O", zip_path
+                ], check=True)
+            else:
+                subprocess.run(["wget", github_url, "-O", zip_path], check=True)
+
+            os.makedirs(job_folder, exist_ok=True)
+            subprocess.run(["unzip", "-q", zip_path, "-d", job_folder], check=True)
+            os.remove(zip_path)
         
-        subprocess.run(["git", "clone", github_url, job_folder], check=True, capture_output=True, text=True)
+        else:
+            subprocess.run(["git", "clone", github_url, job_folder], check=True, capture_output=True, text=True)
+
         os.chdir(job_folder)
 
         command = [
@@ -101,7 +124,7 @@ def submit_job():
             "--mail-user", user_email,          
             "--mail-type", "BEGIN,END,FAIL"
         ]
-        if gpu_request > 0:
+        if int(gpu_request) > 0:
             command.extend(["--gpus", str(gpu_request)])
         command.append("run.sh")
 
