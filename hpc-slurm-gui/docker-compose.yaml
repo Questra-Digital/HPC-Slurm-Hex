@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   backend:
-    image: jawad02/hpc-slurm-backend
+    image: jawad02/hpc-slurm-backend:v1.1.0
     container_name: hpc-slurm-backend
     ports:
       - "5050:5050"
@@ -13,7 +13,7 @@ services:
       - slurm-hpc-network
 
   frontend:
-    image: jawad02/hpc-slurm-frontend
+    image: jawad02/hpc-slurm-frontend:v1.1.0
     container_name: hpc-slurm-frontend
     ports:
       - "5051:5051"
