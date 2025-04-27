@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import Swal from 'sweetalert2';
 
-
 const Login = ({ setUser }) => {
   
   const [email, setEmail] = useState('');
@@ -23,6 +22,13 @@ const Login = ({ setUser }) => {
       sessionStorage.setItem('user_role', res.data.role);
       sessionStorage.setItem('username', res.data.name);
       sessionStorage.setItem('email', email);
+
+      // NEW: Fetch and store user permissions
+      const permissionsRes = await axios.get(
+        `${import.meta.env.VITE_BACKEND_API_BASE_URL}/users/users/${res.data.userId}/permissions`
+      );
+      sessionStorage.setItem('permissions', JSON.stringify(permissionsRes.data.permissions));
+
       setUser(res.data.name);
 
       Swal.fire({
@@ -100,130 +106,127 @@ const Login = ({ setUser }) => {
       </div>
 
       <style>{`
-        
         .login-container {
-  height: 100vh;
-  width: 100vw;
-  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
+          height: 100vh;
+          width: 100vw;
+          background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+          display: flex;
+          justify-content: center;
+          align-items: center;
+        }
 
-.login-card {
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  padding: 2rem; /* Consistent padding around the card */
-  width: 100%;
-  max-width: 480px;
-  margin: 0 auto; /* Center the card horizontally */
-}
+        .login-card {
+          background: white;
+          border-radius: 12px;
+          box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+          padding: 2rem;
+          width: 100%;
+          max-width: 480px;
+          margin: 0 auto;
+        }
 
-.header {
-  text-align: center;
-  margin-bottom: 2rem;
-}
+        .header {
+          text-align: center;
+          margin-bottom: 2rem;
+        }
 
-h1 {
-  color: #1e3a8a;
-  font-size: 2rem;
-  margin-bottom: 0.5rem;
-}
+        h1 {
+          color: #1e3a8a;
+          font-size: 2rem;
+          margin-bottom: 0.5rem;
+        }
 
-.subtitle {
-  color: #64748b;
-  font-size: 1.1rem;
-}
+        .subtitle {
+          color: #64748b;
+          font-size: 1.1rem;
+        }
 
-.setup-form {
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-  padding: 0 1rem; /* Add padding inside the form to match the card's padding */
-}
+        .setup-form {
+          display: flex;
+          flex-direction: column;
+          gap: 1.5rem;
+          padding: 0 1rem;
+        }
 
-.input-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
+        .input-group {
+          display: flex;
+          flex-direction: column;
+          gap: 0.5rem;
+        }
 
-.password-group {
-  position: relative;
-}
+        .password-group {
+          position: relative;
+        }
 
-.password-input-container {
-  position: relative;
-}
+        .password-input-container {
+          position: relative;
+        }
 
-label {
-  color: #1e3a8a;
-  font-weight: 500;
-}
+        label {
+          color: #1e3a8a;
+          font-weight: 500;
+        }
 
-input {
-  padding: 0.75rem;
-  border: 2px solid #e2e8f0;
-  border-radius: 6px;
-  font-size: 1rem;
-  transition: border-color 0.2s;
-  width: 100%; /* Full width within the input-group */
-  box-sizing: border-box; /* Ensure padding doesn’t exceed width */
-}
+        input {
+          padding: 0.75rem;
+          border: 2px solid #e2e8f0;
+          border-radius: 6px;
+          font-size: 1rem;
+          transition: border-color 0.2s;
+          width: 100%;
+          box-sizing: border-box;
+        }
 
-input:focus {
-  outline: none;
-  border-color: #1e3a8a;
-}
+        input:focus {
+          outline: none;
+          border-color: #1e3a8a;
+        }
 
-input:disabled {
-  background: #f3f4f6;
-  cursor: not-allowed;
-}
+        input:disabled {
+          background: #f3f4f6;
+          cursor: not-allowed;
+        }
 
-.toggle-password {
-  position: absolute;
-  right: 10px;
-  top: 50%;
-  transform: translateY(-50%);
-  background: none;
-  border: none;
-  color: #64748b;
-  cursor: pointer;
-  font-size: 0.9rem;
-  padding: 0;
-}
+        .toggle-password {
+          position: absolute;
+          right: 10px;
+          top: 50%;
+          transform: translateY(-50%);
+          background: none;
+          border: none;
+          color: #64748b;
+          cursor: pointer;
+          font-size: 0.9rem;
+          padding: 0;
+        }
 
-.submit-btn {
-  background: #1e3a8a;
-  color: white;
-  padding: 0.75rem 1rem;
-  border: none;
-  border-radius: 6px;
-  font-size: 1rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background 0.2s;
-  width: 100%; /* Full width button to match inputs */
-}
+        .submit-btn {
+          background: #1e3a8a;
+          color: white;
+          padding: 0.75rem 1rem;
+          border: none;
+          border-radius: 6px;
+          font-size: 1rem;
+          font-weight: 500;
+          cursor: pointer;
+          transition: background 0.2s;
+        }
 
-.submit-btn:hover:not(:disabled) {
-  background: #1e40af;
-}
+        .ubmit-btn:hover:not(:disabled) {
+          background: #1e40af;
+        }
 
-.submit-btn:disabled {
-  background: #94a3b8;
-  cursor: not-allowed;
-}
+        .submit-btn:disabled {
+          background: #94a3b8;
+          cursor: not-allowed;
+        }
 
-.footer {
-  text-align: center;
-  margin-top: 2rem;
-  color: #64748b;
-  font-size: 0.9rem;
-}
-
+        .footer {
+          text-align: center;
+          margin-top: 2rem;
+          color: #64748b;
+          font-size: 0.9rem;
+        }
       `}</style>
     </div>
   );

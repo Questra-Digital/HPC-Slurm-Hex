@@ -13,11 +13,15 @@ import {
 
 export default function Sidebar({ user, activeMenuItem, setActiveMenuItem }) {
     const [userRole, setUserRole] = useState(sessionStorage.getItem("user_role") || "user");
+    // NEW: State for permissions
+    const [permissions, setPermissions] = useState(JSON.parse(sessionStorage.getItem("permissions") || "[]"));
     const navigate = useNavigate();
 
     useEffect(() => {
         const role = sessionStorage.getItem("user_role") || "user";
+        const storedPermissions = JSON.parse(sessionStorage.getItem("permissions") || "[]");
         setUserRole(role);
+        setPermissions(storedPermissions);
     }, []);
 
     const handleLogout = () => {
@@ -43,41 +47,46 @@ export default function Sidebar({ user, activeMenuItem, setActiveMenuItem }) {
             
             <nav className="sidebar-nav">
                 <ul>
-                    <li className={activeMenuItem === "dashboard" ? "active" : ""}>
-                        <a href="#" onClick={() => setActiveMenuItem("dashboard")}>
-                            <LayoutDashboard size={18} className="icon" />
-                            Dashboard
-                        </a>
-                    </li>
+                    {/* NEW: Conditionally render based on permissions */}
+                    {permissions.includes("dashboard") && (
+                        <li className={activeMenuItem === "dashboard" ? "active" : ""}>
+                            <a href="#" onClick={() => setActiveMenuItem("dashboard")}>
+                                <LayoutDashboard size={18} className="icon" />
+                                Dashboard
+                            </a>
+                        </li>
+                    )}
 
-                    <li className={activeMenuItem === "jobs" ? "active" : ""}>
-                        <a href="#" onClick={() => setActiveMenuItem("jobs")}>
-                            <Clock size={18} className="icon" />
-                            Jobs Management
-                        </a>
-                    </li>
+                    {permissions.includes("jobs") && (
+                        <li className={activeMenuItem === "jobs" ? "active" : ""}>
+                            <a href="#" onClick={() => setActiveMenuItem("jobs")}>
+                                <Clock size={18} className="icon" />
+                                Jobs Management
+                            </a>
+                        </li>
+                    )}
                     
-                    {userRole === "admin" && (
-                        <>
-                            <li className={activeMenuItem === "users" ? "active" : ""}>
-                                <a href="#" onClick={() => setActiveMenuItem("users")}>
-                                    <Users size={18} className="icon" />
-                                    Users/Groups
-                                </a>
-                            </li>
+                    {permissions.includes("users") && (
+                        <li className={activeMenuItem === "users" ? "active" : ""}>
+                            <a href="#" onClick={() => setActiveMenuItem("users")}>
+                                <Users size={18} className="icon" />
+                                Users/Groups
+                            </a>
+                        </li>
+                    )}
 
-                            <li className={activeMenuItem === "resources" ? "active" : ""}>
-                                <a href="#" onClick={() => setActiveMenuItem("resources")}>
-                                    <BarChart3 size={18} className="icon" />
-                                    Resource Allocation
-                                </a>
-                            </li>
-                        </>
+                    {permissions.includes("resources") && (
+                        <li className={activeMenuItem === "resources" ? "active" : ""}>
+                            <a href="#" onClick={() => setActiveMenuItem("resources")}>
+                                <BarChart3 size={18} className="icon" />
+                                Resource Allocation
+                            </a>
+                        </li>
                     )}
 
                     <li className="divider"></li>
 
-                    {userRole === "admin" && (
+                    {permissions.includes("environment") && (
                         <li className={activeMenuItem === "environment" ? "active" : ""}>
                             <a href="#" onClick={() => setActiveMenuItem("environment")}>
                                 <HardDrive size={18} className="icon" />
@@ -86,12 +95,14 @@ export default function Sidebar({ user, activeMenuItem, setActiveMenuItem }) {
                         </li>
                     )}
 
-                    <li className={activeMenuItem === "settings" ? "active" : ""}>
-                        <a href="#" onClick={() => setActiveMenuItem("settings")}>
-                            <Settings size={18} className="icon" />
-                            Settings
-                        </a>
-                    </li>
+                    {permissions.includes("settings") && (
+                        <li className={activeMenuItem === "settings" ? "active" : ""}>
+                            <a href="#" onClick={() => setActiveMenuItem("settings")}>
+                                <Settings size={18} className="icon" />
+                                Settings
+                            </a>
+                        </li>
+                    )}
                 </ul>
             </nav>
             
@@ -101,8 +112,6 @@ export default function Sidebar({ user, activeMenuItem, setActiveMenuItem }) {
                     Logout
                 </button>
             </div>
-
-            
         </div>
     );
 }

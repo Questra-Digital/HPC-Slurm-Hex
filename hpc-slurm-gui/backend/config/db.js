@@ -23,6 +23,12 @@ const User = sequelize.define("User", {
 const Group = sequelize.define("Group", {
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
     name: { type: DataTypes.STRING(50), allowNull: false, unique: true },
+    // NEW: Add permissions column to store allowed tabs
+    permissions: { 
+        type: DataTypes.JSON, 
+        allowNull: true, 
+        defaultValue: ["dashboard", "jobs", "settings"] 
+    },
     created_at: { type: DataTypes.DATE, defaultValue: Sequelize.NOW }
 }, { tableName: 'groups' });
 
@@ -83,6 +89,6 @@ User.hasOne(ResourceLimit, { foreignKey: 'user_id' });
 Group.hasOne(ResourceLimit, { foreignKey: 'group_id' });
 
 // Sync database
-sequelize.sync().then(() => console.log("Database & tables created!"));
+sequelize.sync({ alter: true }).then(() => console.log("Database & tables updated!"));
 
 module.exports = { sequelize, User, Group, UserGroup, Node, ResourceLimit };

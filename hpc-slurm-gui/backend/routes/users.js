@@ -3,7 +3,6 @@ const bcrypt = require("bcryptjs");
 const { User, Group, UserGroup, ResourceLimit } = require("../config/db");
 const router = express.Router();
 
-
 router.get("/users", async (req, res) => {
     try {
         const users = await User.findAll({
@@ -60,7 +59,6 @@ router.delete("/users/:id", async (req, res) => {
     }
 });
 
-
 router.get("/groups", async (req, res) => {
     try {
         const groups = await Group.findAll();
@@ -73,7 +71,7 @@ router.get("/groups", async (req, res) => {
 
 router.post("/groups", async (req, res) => {
     try {
-        const { name } = req.body;
+        const { name, permissions } = req.body;
         
         if (!name || name.trim() === "") {
             return res.status(400).json({ message: "Group name is required" });
@@ -84,7 +82,16 @@ router.post("/groups", async (req, res) => {
             return res.status(400).json({ message: "A group with this name already exists" });
         }
         
-        const newGroup = await Group.create({ name });
+        // NEW: Validate permissions
+        const validPermissions = ["dashboard", "jobs", "users", "resources", "environment", "settings"];
+        if (permissions && !permissions.every(p => validPermissions.includes(p))) {
+            return res.status(400).json({ message: "Invalid permissions provided" });
+        }
+
+        const newGroup = await Group.create({ 
+            name, 
+            permissions: permissions || ["dashboard", "jobs", "settings"] 
+        });
         res.status(201).json(newGroup);
     } catch (error) {
         console.error("Error creating group:", error);
@@ -95,14 +102,23 @@ router.post("/groups", async (req, res) => {
 router.put("/groups/:id", async (req, res) => {
     try {
         const { id } = req.params;
-        const { name } = req.body;
+        const { name, permissions } = req.body;
         
         const group = await Group.findByPk(id);
         if (!group) {
             return res.status(404).json({ message: "Group not found" });
         }
 
-        if (name) await group.update({ name });
+        // NEW: Validate permissions
+        const validPermissions = ["dashboard", "jobs", "users", "resources", "environment", "settings"];
+        if (permissions && !permissions.every(p => validPermissions.includes(p))) {
+            return res.status(400).json({ message: "Invalid permissions provided" });
+        }
+
+        await group.update({ 
+            name: name || group.name, 
+            permissions: permissions || group.permissions 
+        });
         res.json({ message: "Group updated successfully" });
     } catch (error) {
         console.error("Error updating group:", error);
@@ -238,6 +254,44 @@ router.get("/users/:userId/groups", async (req, res) => {
     } catch (error) {
         console.error("Error fetching groups for user:", error);
         res.status(500).json({ message: "Error fetching groups for user", error: error.message });
+    }
+});
+
+// NEW: Route to get user permissions
+router.get("/users/:userId/permissions", async (req, res) => {
+    try {
+        const { userId } = req.params;
+        
+        const user = await User.findByPk(userId);
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        // Admins have all permissions
+        if (user.role === "admin") {
+            return res.json({
+                permissions: ["dashboard", "jobs", "users", "resources", "environment", "settings"]
+            });
+        }
+
+        // Get groups for the user
+        const userGroups = await UserGroup.findAll({
+            where: { user_id: userId }
+        });
+        
+        const groupIds = userGroups.map(ug => ug.group_id);
+        
+        const groups = await Group.findAll({
+            where: { id: groupIds }
+        });
+
+        // Combine permissions from all groups
+        const permissions = [...new Set(groups.flatMap(group => group.permissions || []))];
+        
+        res.json({ permissions });
+    } catch (error) {
+        console.error("Error fetching user permissions:", error);
+        res.status(500).json({ message: "Error fetching user permissions", error: error.message });
     }
 });
 

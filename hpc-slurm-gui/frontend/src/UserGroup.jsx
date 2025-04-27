@@ -9,7 +9,7 @@ export default function UserGroup() {
     
     // State for form inputs
     const [newUser, setNewUser] = useState({ username: "", email: "", password: "" });
-    const [newGroup, setNewGroup] = useState({ name: "" });
+    const [newGroup, setNewGroup] = useState({ name: "", permissions: [] });
     const [selectedUser, setSelectedUser] = useState("");
     const [selectedGroup, setSelectedGroup] = useState("");
     
@@ -27,6 +27,16 @@ export default function UserGroup() {
     // State for pagination
     const [currentPage, setCurrentPage] = useState(1);
     const usersPerPage = 9;
+
+    // NEW: Available permissions
+    const availablePermissions = [
+        { value: "dashboard", label: "Dashboard" },
+        { value: "jobs", label: "Jobs Management" },
+        { value: "users", label: "Users/Groups" },
+        { value: "resources", label: "Resource Allocation" },
+        { value: "environment", label: "Environment" },
+        { value: "settings", label: "Settings" }
+    ];
 
     // Fetch users, groups, and user-group relationships on component mount
     useEffect(() => {
@@ -149,7 +159,7 @@ export default function UserGroup() {
         try {
             await axios.post(`${import.meta.env.VITE_BACKEND_API_BASE_URL}/users/groups`, newGroup);
             setSuccess("Group created successfully");
-            setNewGroup({ name: "" });
+            setNewGroup({ name: "", permissions: [] });
             fetchGroups();
         } catch (err) {
             setError(err.response?.data?.message || "Failed to create group");
@@ -160,7 +170,10 @@ export default function UserGroup() {
     // Function to handle group edit
     const handleEditGroup = (group) => {
         setEditingGroup(group);
-        setNewGroup({ name: group.name });
+        setNewGroup({ 
+            name: group.name, 
+            permissions: group.permissions || [] 
+        });
     };
 
     const handleUpdateGroup = async (e) => {
@@ -168,7 +181,7 @@ export default function UserGroup() {
         try {
             await axios.put(`${import.meta.env.VITE_BACKEND_API_BASE_URL}/users/groups/${editingGroup.id}`, newGroup);
             setSuccess("Group updated successfully");
-            setNewGroup({ name: "" });
+            setNewGroup({ name: "", permissions: [] });
             setEditingGroup(null);
             fetchGroups();
         } catch (err) {
@@ -241,6 +254,16 @@ export default function UserGroup() {
     const getGroupNameById = (id) => {
         const group = groups.find(group => group.id === id);
         return group ? group.name : "Unknown";
+    };
+
+    // NEW: Handle permission checkbox changes
+    const handlePermissionChange = (permission) => {
+        setNewGroup(prev => {
+            const permissions = prev.permissions.includes(permission)
+                ? prev.permissions.filter(p => p !== permission)
+                : [...prev.permissions, permission];
+            return { ...prev, permissions };
+        });
     };
 
     // Pagination logic
@@ -424,7 +447,7 @@ export default function UserGroup() {
                         <div className="card">
                             <h2>{editingGroup ? "Edit Group" : "Create New Group"}</h2>
                             <form onSubmit={editingGroup ? handleUpdateGroup : handleCreateGroup} className="form">
-                                <div className="input-group">
+                                <div className="input-group Rachael">
                                     <label htmlFor="groupname">Group Name</label>
                                     <input
                                         type="text"
@@ -435,6 +458,23 @@ export default function UserGroup() {
                                         required
                                     />
                                 </div>
+                                {/* NEW: Permissions checkboxes */}
+                                <div className="input-group">
+                                    <label>Permissions</label>
+                                    <div className="permissions-checkboxes">
+                                        {availablePermissions.map(perm => (
+                                            <div key={perm.value} className="checkbox-group">
+                                                <input
+                                                    type="checkbox"
+                                                    id={perm.value}
+                                                    checked={newGroup.permissions.includes(perm.value)}
+                                                    onChange={() => handlePermissionChange(perm.value)}
+                                                />
+                                                <label htmlFor={perm.value}>{perm.label}</label>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
                                 <button type="submit" className="submit-btn">
                                     {editingGroup ? "Update Group" : "Create Group"}
                                 </button>
@@ -444,7 +484,7 @@ export default function UserGroup() {
                                         className="cancel-btn" 
                                         onClick={() => {
                                             setEditingGroup(null);
-                                            setNewGroup({ name: "" });
+                                            setNewGroup({ name: "", permissions: [] });
                                         }}
                                     >
                                         Cancel
@@ -461,6 +501,7 @@ export default function UserGroup() {
                                         <tr>
                                             <th>ID</th>
                                             <th>Group Name</th>
+                                            <th>Permissions</th>
                                             <th>Created At</th>
                                             <th>Actions</th>
                                         </tr>
@@ -471,6 +512,7 @@ export default function UserGroup() {
                                                 <tr key={group.id}>
                                                     <td>{group.id}</td>
                                                     <td>{group.name}</td>
+                                                    <td>{(group.permissions || []).join(", ")}</td>
                                                     <td>{new Date(group.created_at).toLocaleString()}</td>
                                                     <td>
                                                         <button 
@@ -490,7 +532,7 @@ export default function UserGroup() {
                                             ))
                                         ) : (
                                             <tr>
-                                                <td colSpan="4">No groups found</td>
+                                                <td colSpan="5">No groups found</td>
                                             </tr>
                                         )}
                                     </tbody>
@@ -715,6 +757,28 @@ export default function UserGroup() {
                 input:focus, select:focus {
                     outline: none;
                     border-color: #1e3a8a;
+                }
+
+                /* NEW: Styling for permissions checkboxes */
+                .permissions-checkboxes {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 0.5rem;
+                }
+
+                .checkbox-group {
+                    display: flex;
+                    align-items: center;
+                    gap: 0.5rem;
+                }
+
+                .checkbox-group input {
+                    width: 1.2rem;
+                    height: 1.2rem;
+                }
+
+                .checkbox-group label {
+                    font-size: 0.9rem;
                 }
 
                 .submit-btn {
