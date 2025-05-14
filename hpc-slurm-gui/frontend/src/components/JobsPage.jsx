@@ -1,8 +1,9 @@
+import React from 'react';
 import { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import Swal from 'sweetalert2';
 
-const BACKEND_API_BASE_URL = import.meta.env.VITE_BACKEND_API_BASE_URL;
+import { API_BASE_URL } from "../config";
 
 export default function JobsPage({ user }) {
   const [jobs, setJobs] = useState([]);
@@ -60,7 +61,7 @@ export default function JobsPage({ user }) {
 
   const fetchMasterNodeIp = async () => {
     try {
-      const response = await axios.get(`${BACKEND_API_BASE_URL}/nodes/get-nodes-list`);
+      const response = await axios.get(`${API_BASE_URL}/nodes/get-nodes-list`);
       const nodes = response.data;
       const masterNode = nodes.find(node => node.node_type === "master");
       if (masterNode) {
@@ -105,8 +106,8 @@ export default function JobsPage({ user }) {
   const fetchResourceLimits = async (context, id) => {
     try {
       const url = context === "user"
-        ? `${BACKEND_API_BASE_URL}/resources/resource-limits?user_id=${id}`
-        : `${BACKEND_API_BASE_URL}/resources/resource-limits?group_id=${id}`;
+        ? `${API_BASE_URL}/resources/resource-limits?user_id=${id}`
+        : `${API_BASE_URL}/resources/resource-limits?group_id=${id}`;
       const limitsRes = await axios.get(url);
       setResourceLimits({
         max_cpu: limitsRes.data.max_cpu || 0,
@@ -215,7 +216,7 @@ export default function JobsPage({ user }) {
         });
 
         // Call backend endpoint to upload file via SFTP
-        const uploadResponse = await axios.post(`${BACKEND_API_BASE_URL}/jobs/upload-ftp`, formData, {
+        const uploadResponse = await axios.post(`${API_BASE_URL}/jobs/upload-ftp`, formData, {
           headers: {
             'Content-Type': 'multipart/form-data',
           },
@@ -251,7 +252,7 @@ export default function JobsPage({ user }) {
     try {
       showLoading("Submitting Job...", "Please wait");
 
-      const nodeResponse = await axios.get(`${BACKEND_API_BASE_URL}/nodes/get-nodes-list`);
+      const nodeResponse = await axios.get(`${API_BASE_URL}/nodes/get-nodes-list`);
       const selectedNode = nodeResponse.data.find(node => node.id === parseInt(selectedNodeId));
 
       if (!selectedNode) {
