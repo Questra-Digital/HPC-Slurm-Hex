@@ -2,7 +2,6 @@
   "name": "frontend",
   "private": true,
   "version": "0.0.0",
-  "type": "module",
   "scripts": {
     "start": "react-scripts start --host 0.0.0.0 --port 5151",
     "dev": "vite",
@@ -17,8 +16,20 @@
   "transform": {
     "^.+\\.jsx?$": "babel-jest"
   },
+  "testPathIgnorePatterns": [
+    "/node_modules/",
+    "/dist/"
+  ],
+  "moduleNameMapper": {
+    "\\.(css|less|scss)$": "identity-obj-proxy"  },
+  "moduleFileExtensions": [
+    "js",
+    "jsx",
+    "json",
+    "node"
+  ],
   "transformIgnorePatterns": [
-    "/node_modules/(?!axios)/"
+    "/node_modules/(?!(axios|lucide-react)/)"    
   ]
 }
 ,
