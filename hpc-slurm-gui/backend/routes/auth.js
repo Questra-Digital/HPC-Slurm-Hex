@@ -7,9 +7,9 @@ const crypto = require("crypto");
 const router = express.Router();
 
 
-const JWT_SECRET = crypto.randomBytes(32).toString('hex');
+//const JWT_SECRET = crypto.randomBytes(32).toString('hex');
 // Uncomment while testing
-// const JWT_SECRET = process.env.JWT_SECRET
+const JWT_SECRET = process.env.JWT_SECRET
 
 router.get("/check-admin", async (req, res) => {
     const admin = await User.findOne({ where: { role: "admin" } });
