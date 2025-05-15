@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import Swal from 'sweetalert2';
+import { API_BASE_URL } from "../config";
 
 const Login = ({ setUser }) => {
   
@@ -16,7 +17,7 @@ const Login = ({ setUser }) => {
     setIsLoading(true);
 
     try {
-      const res = await axios.post(`${import.meta.env.VITE_BACKEND_API_BASE_URL}/auth/login`, { email, password });
+      const res = await axios.post(`${API_BASE_URL}/auth/login`, { email, password });
 
       sessionStorage.setItem('id', res.data.userId);
       sessionStorage.setItem('user_role', res.data.role);
@@ -25,7 +26,7 @@ const Login = ({ setUser }) => {
 
       // NEW: Fetch and store user permissions
       const permissionsRes = await axios.get(
-        `${import.meta.env.VITE_BACKEND_API_BASE_URL}/users/users/${res.data.userId}/permissions`
+        `${API_BASE_URL}/users/users/${res.data.userId}/permissions`
       );
       sessionStorage.setItem('permissions', JSON.stringify(permissionsRes.data.permissions));
 
