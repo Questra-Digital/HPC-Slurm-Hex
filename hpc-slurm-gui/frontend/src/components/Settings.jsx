@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
+import { API_BASE_URL } from "../config";
 
 export default function Settings() {
     const [profile, setProfile] = useState({
@@ -67,7 +68,7 @@ export default function Settings() {
 
     const fetchUserData = async (userId) => {
         try {
-            const response = await axios.get(`${import.meta.env.VITE_BACKEND_API_BASE_URL}/users/users`);
+            const response = await axios.get(`${API_BASE_URL}/users/users`);
             const numericUserId = Number(userId);
             const userData = response.data.find(user => user.id === numericUserId) || response.data[0];
             
@@ -98,7 +99,7 @@ export default function Settings() {
 
     const fetchUserGroups = async (userId) => {
         try {
-            const response = await axios.get(`${import.meta.env.VITE_BACKEND_API_BASE_URL}/users/users/${userId}/groups`);
+            const response = await axios.get(`${API_BASE_URL}/users/users/${userId}/groups`);
             setUserGroups(response.data || []);
         } catch (err) {
             console.error("Failed to fetch user groups:", err);
@@ -108,8 +109,8 @@ export default function Settings() {
     const fetchResourceLimits = async (context, id) => {
         try {
             const url = context === "user"
-                ? `${import.meta.env.VITE_BACKEND_API_BASE_URL}/resources/resource-limits?user_id=${id}`
-                : `${import.meta.env.VITE_BACKEND_API_BASE_URL}/resources/resource-limits?group_id=${id}`;
+                ? `${API_BASE_URL}/resources/resource-limits?user_id=${id}`
+                : `${API_BASE_URL}/resources/resource-limits?group_id=${id}`;
             const response = await axios.get(url);
             setResourceLimits({
                 max_cpu: response.data.max_cpu || 0,
@@ -138,7 +139,7 @@ export default function Settings() {
         clearNotifications();
         
         try {
-            await axios.put(`${import.meta.env.VITE_BACKEND_API_BASE_URL}/users/users/${profile.id}`, {
+            await axios.put(`${API_BASE_URL}/users/users/${profile.id}`, {
                 username: formData.username,
                 email: formData.email
             });
@@ -192,7 +193,7 @@ export default function Settings() {
         }
         
         try {
-            await axios.put(`${import.meta.env.VITE_BACKEND_API_BASE_URL}/users/users/${profile.id}`, {
+            await axios.put(`${API_BASE_URL}/users/users/${profile.id}`, {
                 password: formData.newPassword
             });
             

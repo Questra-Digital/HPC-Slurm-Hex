@@ -10,6 +10,7 @@ import {
   LogOut,
   HardDrive
 } from "lucide-react";
+import { API_BASE_URL } from "../config";
 
 export default function Sidebar({ user, activeMenuItem, setActiveMenuItem }) {
     const [userRole, setUserRole] = useState(sessionStorage.getItem("user_role") || "user");
