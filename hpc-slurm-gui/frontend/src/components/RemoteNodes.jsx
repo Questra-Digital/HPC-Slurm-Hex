@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import React,{ useState, useEffect } from "react";
 import axios from "axios";
+import { API_BASE_URL } from "../config";
 
 export default function RemoteNodes() {
     const [masterNode, setMasterNode] = useState({ name: "", ip_address: "" });
@@ -10,7 +11,7 @@ export default function RemoteNodes() {
     useEffect(() => {
         async function fetchSavedNodes() {
             try {
-                const response = await axios.get(`${import.meta.env.VITE_BACKEND_API_BASE_URL}/nodes/get-nodes-list`);
+                const response = await axios.get(`${iAPI_BASE_URL}/nodes/get-nodes-list`);
                 const nodes = response.data;
 
                 if (nodes.length > 0) {
@@ -62,7 +63,7 @@ export default function RemoteNodes() {
 
     const connectNode = async (node, index, type) => {
         try {
-            const res = await axios.post(`${import.meta.env.VITE_BACKEND_API_BASE_URL}/nodes/connect`, {
+            const res = await axios.post(`${BACKEND_API_BASE_URL}/nodes/connect`, {
                 name: node.name,
                 ip: node.ip_address,
                 type,
@@ -81,9 +82,9 @@ export default function RemoteNodes() {
 
     const resetNodes = async () => {
         try {
-            const res = await axios.post(`${import.meta.env.VITE_BACKEND_API_BASE_URL}/nodes/reset-nodes`);
+            const res = await axios.post(`${API_BASE_URL}/nodes/reset-nodes`);
             console.log(res.data.message);
-            const response = await axios.get(`${import.meta.env.VITE_BACKEND_API_BASE_URL}/nodes/get-nodes-list`);
+            const response = await axios.get(`${API_BASE_URL}/nodes/get-nodes-list`);
             setMasterNode({ name: "", ip_address: "" });
             setWorkerNodes([]);
             setWorkerCount(0);

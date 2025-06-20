@@ -1,0 +1,1 @@
+export const API_BASE_URL = process.env.VITE_BACKEND_API_BASE_URL;

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { API_BASE_URL } from "../config";
 
 export default function ResourceAllocation() {
   const [nodes, setNodes] = useState([]);
@@ -35,9 +36,9 @@ export default function ResourceAllocation() {
       setIsLoading(true);
       try {
         const [nodesRes, usersRes, groupsRes] = await Promise.all([
-          fetch(`${import.meta.env.VITE_BACKEND_API_BASE_URL}/nodes/get-nodes-list`),
-          fetch(`${import.meta.env.VITE_BACKEND_API_BASE_URL}/users/users`),
-          fetch(`${import.meta.env.VITE_BACKEND_API_BASE_URL}/users/groups`),
+          fetch(`${API_BASE_URL}/nodes/get-nodes-list`),
+          fetch(`${API_BASE_URL}/users/users`),
+          fetch(`${API_BASE_URL}/users/groups`),
         ]);
 
         if (!nodesRes.ok || !usersRes.ok || !groupsRes.ok) {
@@ -86,7 +87,7 @@ export default function ResourceAllocation() {
       setSelectedNodes({});
       const param = entityType === "user" ? "user_id" : "group_id";
       const response = await fetch(
-        `${import.meta.env.VITE_BACKEND_API_BASE_URL}/resources/resource-limits?${param}=${entityId}`
+        `${API_BASE_URL}/resources/resource-limits?${param}=${entityId}`
       );
       if (!response.ok) throw new Error("Failed to fetch resource limits");
       const data = await response.json();
@@ -144,7 +145,7 @@ export default function ResourceAllocation() {
         ...resourceLimits,
       };
 
-      const response = await fetch(`${import.meta.env.VITE_BACKEND_API_BASE_URL}/resources/resource-limits`, {
+      const response = await fetch(`${API_BASE_URL}/resources/resource-limits`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),

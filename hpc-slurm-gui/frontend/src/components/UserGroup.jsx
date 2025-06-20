@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
+import { API_BASE_URL } from "../config";
 
 export default function UserGroup() {
     // State for users and groups
@@ -48,7 +49,7 @@ export default function UserGroup() {
     // Function to fetch all users
     const fetchUsers = async () => {
         try {
-            const response = await axios.get(`${import.meta.env.VITE_BACKEND_API_BASE_URL}/users/users`);
+            const response = await axios.get(`${API_BASE_URL}/users/users`);
             setUsers(response.data);
         } catch (err) {
             setError("Failed to fetch users");
@@ -59,7 +60,7 @@ export default function UserGroup() {
     // Function to fetch all groups
     const fetchGroups = async () => {
         try {
-            const response = await axios.get(`${import.meta.env.VITE_BACKEND_API_BASE_URL}/users/groups`);
+            const response = await axios.get(`${API_BASE_URL}/users/groups`);
             setGroups(response.data);
         } catch (err) {
             setError("Failed to fetch groups");
@@ -70,7 +71,7 @@ export default function UserGroup() {
     // Function to fetch user-group relationships
     const fetchUserGroups = async () => {
         try {
-            const response = await axios.get(`${import.meta.env.VITE_BACKEND_API_BASE_URL}/users/user-groups`);
+            const response = await axios.get(`${API_BASE_URL}/users/user-groups`);
             setUserGroups(response.data);
         } catch (err) {
             setError("Failed to fetch user-group relationships");
@@ -91,7 +92,7 @@ export default function UserGroup() {
         }
         
         try {
-            await axios.post(`${import.meta.env.VITE_BACKEND_API_BASE_URL}/auth/signup`, newUser);
+            await axios.post(`${API_BASE_URL}/auth/signup`, newUser);
             setSuccess("User created successfully");
             setNewUser({ username: "", email: "", password: "" });
             fetchUsers();
@@ -123,7 +124,7 @@ export default function UserGroup() {
         }
         
         try {
-            await axios.put(`${import.meta.env.VITE_BACKEND_API_BASE_URL}/users/users/${editingUser.id}`, newUser);
+            await axios.put(`${API_BASE_URL}/users/users/${editingUser.id}`, newUser);
             setSuccess("User updated successfully");
             setNewUser({ username: "", email: "", password: "" });
             setEditingUser(null);
@@ -137,7 +138,7 @@ export default function UserGroup() {
     const handleDeleteUser = async (userId) => {
         if (window.confirm("Are you sure you want to delete this user?")) {
             try {
-                await axios.delete(`${import.meta.env.VITE_BACKEND_API_BASE_URL}/users/users/${userId}`);
+                await axios.delete(`${API_BASE_URL}/users/users/${userId}`);
                 setSuccess("User deleted successfully");
                 fetchUsers();
                 fetchUserGroups();
@@ -157,7 +158,7 @@ export default function UserGroup() {
         setSuccess("");
         
         try {
-            await axios.post(`${import.meta.env.VITE_BACKEND_API_BASE_URL}/users/groups`, newGroup);
+            await axios.post(`${API_BASE_URL}/users/groups`, newGroup);
             setSuccess("Group created successfully");
             setNewGroup({ name: "", permissions: [] });
             fetchGroups();
@@ -179,7 +180,7 @@ export default function UserGroup() {
     const handleUpdateGroup = async (e) => {
         e.preventDefault();
         try {
-            await axios.put(`${import.meta.env.VITE_BACKEND_API_BASE_URL}/users/groups/${editingGroup.id}`, newGroup);
+            await axios.put(`${API_BASE_URL}/users/groups/${editingGroup.id}`, newGroup);
             setSuccess("Group updated successfully");
             setNewGroup({ name: "", permissions: [] });
             setEditingGroup(null);
@@ -193,7 +194,7 @@ export default function UserGroup() {
     const handleDeleteGroup = async (groupId) => {
         if (window.confirm("Are you sure you want to delete this group?")) {
             try {
-                await axios.delete(`${import.meta.env.VITE_BACKEND_API_BASE_URL}/users/groups/${groupId}`);
+                await axios.delete(`${API_BASE_URL}/users/groups/${groupId}`);
                 setSuccess("Group deleted successfully");
                 fetchGroups();
                 fetchUserGroups();
@@ -215,7 +216,7 @@ export default function UserGroup() {
         }
         
         try {
-            await axios.post(`${import.meta.env.VITE_BACKEND_API_BASE_URL}/users/user-groups`, {
+            await axios.post(`${API_BASE_URL}/users/user-groups`, {
                 user_id: selectedUser,
                 group_id: selectedGroup
             });
@@ -233,7 +234,7 @@ export default function UserGroup() {
         setSuccess("");
         
         try {
-            await axios.delete(`${import.meta.env.VITE_BACKEND_API_BASE_URL}/users/user-groups`, {
+            await axios.delete(`${API_BASE_URL}/users/user-groups`, {
                 data: { user_id: userId, group_id: groupId }
             });
             setSuccess("User removed from group successfully");

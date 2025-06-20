@@ -1,7 +1,8 @@
+import React from "react";
 import { useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
-
+import { API_BASE_URL } from "../config";
 export default function AdminSetup() {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
@@ -12,7 +13,7 @@ export default function AdminSetup() {
     const handleSetup = async (e) => {
         e.preventDefault();
         try {
-            await axios.post(`${import.meta.env.VITE_BACKEND_API_BASE_URL}/auth/setup-admin`, { username: "admin", email, password });
+            await axios.post(`${API_BASE_URL}/auth/setup-admin`, { username: "admin", email, password });
             navigate("/login");
             window.location.href = "/login";
         } catch (error) {

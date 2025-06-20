@@ -10,7 +10,7 @@ import {
   LogOut,
   HardDrive
 } from "lucide-react";
-
+import { API_BASE_URL } from "../config";
 export default function Dashboard({ setActiveMenuItem }) {
   const [jobs, setJobs] = useState([]);
   const [username] = useState(sessionStorage.getItem("username") || "default_user_name");
@@ -30,7 +30,7 @@ export default function Dashboard({ setActiveMenuItem }) {
 
   const fetchMasterNodeIp = async () => {
     try {
-      const response = await axios.get(`${import.meta.env.VITE_BACKEND_API_BASE_URL}/nodes/get-nodes-list`);
+      const response = await axios.get(`${API_BASE_URL}/nodes/get-nodes-list`);
       const nodes = response.data;
       const masterNode = nodes.find(node => node.node_type === "master");
       if (masterNode) {
