@@ -5,7 +5,10 @@ const { execSync } = require('child_process');
 const os = require('os');
 const redis = require('redis');
 const app = express();
-const port = 5050;
+const dotenv = require('dotenv');
+// Load environment variables from .env file
+dotenv.config();
+const port = process.env.PORT;
 
 const REDIS_HOST = 'localhost';
 const REDIS_PORT = 6379;
@@ -113,7 +116,7 @@ const fetchAndCacheJobs = async () => {
               exitCode: fields[9],
               userName: fields[10] || null,
               node: fields[11] || null,
-              download_link: `http://${nodeIP}:5050/download/${fields[0]}.zip`,
+              download_link: `http://${nodeIP}:${port}/download/${fields[0]}.zip`,
             };
           } else if (currentJob) {
             currentJob.batchJob = {
