@@ -1,25 +1,37 @@
-version: '3.8'
 
 services:
-  backend:
-    image: jawad02/hpc-slurm-backend:v1.1.0
-    container_name: hpc-slurm-backend
+  reverse-proxy:
+    image: nginx:latest
+    container_name: hpc-proxy
     ports:
-      - "5050:5050"
+      - "5051:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
       - frontend
-    restart: always
+      - backend
     networks:
       - slurm-hpc-network
 
   frontend:
-    image: jawad02/hpc-slurm-frontend:v1.1.0
+    image: adeelumar17/hpc-slurm-frontend:v1.1.1
     container_name: hpc-slurm-frontend
-    ports:
-      - "5051:5051"
-    restart: always
+    expose:
+      - "5051"
     networks:
       - slurm-hpc-network
+    restart: always
+
+  backend:
+    image: adeelumar17/hpc-slurm-backend:v1.1.1
+    container_name: hpc-slurm-backend
+    expose:
+      - "5052"
+    env_file:
+      - ./backend/.env
+    networks:
+      - slurm-hpc-network
+    restart: always
 
 networks:
   slurm-hpc-network:

@@ -4,6 +4,7 @@ import axios from "axios";
 import Swal from 'sweetalert2';
 
 import { API_BASE_URL } from "../config";
+import {MASTER_PORT} from "../config";
 
 export default function JobsPage({ user }) {
   const [jobs, setJobs] = useState([]);
@@ -78,9 +79,9 @@ export default function JobsPage({ user }) {
     try {
       setIsLoading(true);
       const [jobsRes, nodesRes, groupsRes] = await Promise.all([
-        axios.get(`http://${masterNodeIp}:5050/jobs`),
-        axios.get(`${BACKEND_API_BASE_URL}/nodes/get-nodes-list`),
-        axios.get(`${BACKEND_API_BASE_URL}/users/users/${userId}/groups`),
+        axios.get(`http://${masterNodeIp}:${MASTER_PORT}/jobs`),
+        axios.get(`${API_BASE_URL}/nodes/get-nodes-list`),
+        axios.get(`${API_BASE_URL}/users/users/${userId}/groups`),
       ]);
 
       setJobs(jobsRes.data.jobs || []);
@@ -123,7 +124,7 @@ export default function JobsPage({ user }) {
     if (!masterNodeIp) return;
   
     try {
-      const jobsRes = await axios.get(`http://${masterNodeIp}:5050/jobs`);
+      const jobsRes = await axios.get(`http://${masterNodeIp}:${MASTER_PORT}/jobs`);
       const newJobs = jobsRes.data.jobs || [];
   
       if (newJobs.length !== jobs.length) {
@@ -259,7 +260,7 @@ export default function JobsPage({ user }) {
         throw new Error("Selected node not found");
       }
 
-      const workerUrl = `http://${selectedNode.ip_address}:5050/submit-job`;
+      const workerUrl = `http://${selectedNode.ip_address}:${MASTER_PORT}/submit-job`;
       await axios.post(workerUrl, payload);
 
       Swal.close();
@@ -297,14 +298,14 @@ export default function JobsPage({ user }) {
   
       setIsLoading(true);
   
-      const jobIpRes = await axios.get(`http://${masterNodeIp}:5050/job-ip/${jobId}`);
+      const jobIpRes = await axios.get(`http://${masterNodeIp}:${MASTER_PORT}/job-ip/${jobId}`);
       const nodeIp = jobIpRes.data?.nodes?.[0]?.ip;
   
       if (!nodeIp) {
         throw new Error("Unable to determine job node IP.");
       }
   
-      const response = await axios.post(`http://${nodeIp}:5050/cancel-job`, { Job_id: jobId });
+      const response = await axios.post(`http://${nodeIp}:${MASTER_PORT}/cancel-job`, { Job_id: jobId });
   
       showAlert("success", "Job Canceled", response.data.message, () => {
         fetchInitialData();

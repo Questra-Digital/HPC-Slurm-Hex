@@ -1,0 +1,102 @@
+# Template input file to define local variable settings for use with
+# an OpenHPC installation recipe.
+
+# ---------------------------
+# SMS (master) node settings
+# ---------------------------
+sms_name: master                            # Hostname for master server (SMS)
+sms_ip: 192.168.90.10                   # Local (internal) IP address on SMS
+sms_eth_internal: ens35                 # Internal ethernet interface on SMS
+internal_netmask: 255.255.255.0         # Subnet netmask for internal cluster network
+internal_network: 192.168.90.0          # Subnet network for internal cluster network
+ipv4_gateway: 192.168.90.10             # IPv4 gateway
+ntp_server: 0.centos.pool.ntp.org       # Local NTP server for time synchronization
+# bmc_username: unknown                 # BMC user credentials for use by IPMI (commented out: no BMC/IPMI in VM setup)
+# bmc_password: unknown                 # BMC password (commented out: no BMC/IPMI in VM setup)
+provision_wait: 180                     # Additional time to wait for compute nodes to provision (seconds)
+dns_servers: 192.168.90.10              # DNS servers for cluster
+domain_name: hpc.localdomain            # Local domain name for cluster
+# iso_path: ""                          # Path to OS ISO image (xCAT recipe only, commented out: unused in Warewulf for diskful nodes)
+# initialize_options: ""                # Osdeployment Initialize Options (Confluent recipe only, commented out: unused in Warewulf)
+# deployment_protocols: ""              # Deployment protocols (Confluent recipe only, commented out: unused in Warewulf)
+
+# Path to local repository web roots (Confluent recipe only)
+# ohpc_repo_dir_confluent: /var/lib/confluent/public/ohpc # (commented out: unused in Warewulf)
+# ohpc_repo_remote_dir: /confluent-public/ohpc           # (commented out: unused in Warewulf)
+# epel_repo_dir_confluent: /var/lib/confluent/public/epel # (commented out: unused in Warewulf)
+# epel_repo_remote_dir: /confluent-public/epel           # (commented out: unused in Warewulf)
+
+# Path to local repository web roots (xCAT recipe only)
+# ohpc_repo_dir: /install/ohpc                           # (commented out: unused in Warewulf)
+# epel_repo_dir: /install/epel                           # (commented out: unused in Warewulf)
+
+# Provisioning interface used by compute hosts (Warewulf recipe only)
+eth_provision: ens35
+
+# Flags for optional installation/configuration
+enable_ib: 0                            # Enable InfiniBand support
+enable_opa: 0                           # Enable Omni-Path support
+enable_opafm: 0                         # Enable OPA fabric manager
+enable_mpi_defaults: 1                  # Enable default MPI stacks
+enable_mpich_ucx: 1                     # Enable MPICH UCX
+enable_ipoib: 0                         # Enable IP over InfiniBand
+enable_clustershell: 0                  # Enable clustershell
+enable_ipmisol: 0                       # Enable IPMI serial-over-LAN
+enable_opensm: 0                        # Enable opensm subnet manager
+enable_genders: 0                       # Enable genders
+enable_magpie: 0                        # Enable magpie
+enable_kargs: 0                         # Enable additional kernel arguments
+enable_beegfs_client: 0                 # Enable BeeGFS client
+enable_lustre_client: 0                 # Enable Lustre client
+enable_mrsh: 0                          # Enable mrsh
+enable_pmix: 0                          # Enable PMIx
+enable_geopm: 0                         # Enable GEOPM
+enable_intel_packages: 1                # Enable Intel vendor packages
+enable_arm1_packages: 0                 # Enable ARM vendor packages
+enable_nvidia_gpu_driver: 1             # Enable NVIDIA GPU driver
+update_slurm_nodeconfig: 1              # Update Slurm node configuration
+
+# -------------------------
+# Compute node settings
+# -------------------------
+num_computes: 2                         # Total number of compute nodes
+# compute_regex: c*                     # Regex matching compute hostnames (commented out: unused in diskful setup)
+# compute_prefix: c                     # Prefix for compute hostnames (commented out: unused in diskful setup)
+
+# Compute hostnames
+c_name:
+  - compute1
+  - compute2
+
+# Compute node IP addresses
+c_ip:
+  - 192.168.90.11
+  - 192.168.90.12
+
+# Compute node MAC addresses for provisioning interface
+c_mac:
+  - 00:50:56:9b:58:83
+  - 00:50:56:9b:6a:ca
+
+# Compute node BMC addresses
+# c_bmc:
+#   - 10.16.1.1                         # (commented out: no BMC/IPMI in VM setup)
+#   - 10.16.1.2                         # (commented out: no BMC/IPMI in VM setup)
+
+# Slurm node configuration
+slurm_node_config: "compute[1-2] Sockets=8 CoresPerSocket=1 ThreadsPerCore=1 RealMemory=6912"
+
+# -------------------
+# Optional settings
+# -------------------
+# kargs: acpi_pad.disable=1             # Additional kernel arguments for bootstrap (commented out: unused for diskful nodes)
+# beegfs_repo: https://www.beegfs.io/release/beegfs_6/dists/beegfs-rhel7.repo # BeeGFS repository URL (commented out: BeeGFS disabled)
+# sysmgmtd_host: 172.17.1.16            # BeeGFS sysMgmtdHost (commented out: BeeGFS disabled)
+# mgs_fs_name: 192.168.100.254@o2ib:/lustre1 # Lustre MGS mount name (commented out: Lustre disabled)
+# ipoib_netmask: 255.255.0.0            # Subnet netmask for IPoIB network (commented out: InfiniBand disabled)
+# sms_ipoib: 192.168.0.1               # IPoIB address for SMS server (commented out: InfiniBand disabled)
+# c_ipoib:
+#   - 192.168.1.1                       # (commented out: InfiniBand disabled, only 2 nodes)
+#   - 192.168.1.2                       # (commented out: InfiniBand disabled, only 2 nodes)
+#   - 192.168.1.3                       # (commented out: InfiniBand disabled, only 2 nodes)
+#   - 192.168.1.4                       # (commented out: InfiniBand disabled, only 2 nodes)
