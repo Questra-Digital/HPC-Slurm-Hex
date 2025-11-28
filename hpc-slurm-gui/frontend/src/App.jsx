@@ -1,11 +1,13 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import axios from "axios";
-import Login from "./Login";
-import Home from "./Home";
-import AdminSetup from "./AdminSetup";
-import RemoteNodes from "./RemoteNodes";
-import JobsPage from "./JobsPage";
+import Login from "./components/Login";
+import Home from "./components/Home";
+import AdminSetup from "./components/AdminSetup";
+import RemoteNodes from "./components/RemoteNodes";
+import JobsPage from "./components/JobsPage";
+import { API_BASE_URL } from "./config";
+
 
 function App() {
     // Check sessionStorage for username on initial load
@@ -14,7 +16,7 @@ function App() {
 
     useEffect(() => {
         const checkAdmin = async () => {
-            const res = await axios.get(`${import.meta.env.VITE_BACKEND_API_BASE_URL}/auth/check-admin`);
+            const res = await axios.get(`${API_BASE_URL}/auth/check-admin`);
             setAdminExists(res.data.adminExists);
         };
         checkAdmin();

@@ -7,11 +7,8 @@ const crypto = require("crypto");
 const router = express.Router();
 
 
-<<<<<<< HEAD
 // const JWT_SECRET = crypto.randomBytes(32).toString('hex');
-=======
-//const JWT_SECRET = crypto.randomBytes(32).toString('hex');
->>>>>>> b959f773f8123197d6b166309f1db19de3b849e4
+
 // Uncomment while testing
 const JWT_SECRET = process.env.JWT_SECRET
 

@@ -11,6 +11,7 @@ import {
   HardDrive
 } from "lucide-react";
 import { API_BASE_URL } from "../config";
+import { MASTER_PORT } from "../config";
 export default function Dashboard({ setActiveMenuItem }) {
   const [jobs, setJobs] = useState([]);
   const [username] = useState(sessionStorage.getItem("username") || "default_user_name");
@@ -45,7 +46,7 @@ export default function Dashboard({ setActiveMenuItem }) {
     if (!masterNodeIp) return; // Wait until we have the master node IP
     
     try {
-      const response = await axios.get(`http://${masterNodeIp}:5050/jobs`);
+      const response = await axios.get(`http://${masterNodeIp}:${MASTER_PORT}/jobs`);
       const allJobs = response.data.jobs || [];
       
       const filteredJobs = filterJobs(allJobs);

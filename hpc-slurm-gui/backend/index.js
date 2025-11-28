@@ -14,11 +14,11 @@ app.use(express.json());
 app.use(cors());
 
 // Route handlers
-app.use("/auth", authRoutes);
-app.use("/resources", resourceRoutes);
-app.use("/users", userRoutes);
-app.use("/nodes", nodesRoutes);
-app.use("/jobs", jobsRoutes); 
+app.use("/api/auth", authRoutes);
+app.use("/api/resources", resourceRoutes);
+app.use("/api/users", userRoutes);
+app.use("/api/nodes", nodesRoutes);
+app.use("/api/jobs", jobsRoutes); 
 
 const PORT = process.env.PORT;
 
