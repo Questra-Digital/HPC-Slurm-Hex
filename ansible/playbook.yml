@@ -1,0 +1,938 @@
+---
+- name: OpenHPC Installation Playbook
+  hosts: localhost
+  become: yes
+  vars_files:
+    - input.yml
+  tasks:
+    - name: Update /etc/hosts with cluster hostnames
+      lineinfile:
+        path: /etc/hosts
+        line: "{{ item.ip }} {{ item.name }}.{{ domain_name }} {{ item.name }}"
+        state: present
+      loop:
+        - { ip: "{{ sms_ip }}", name: "{{ sms_name }}" }
+        - { ip: "{{ c_ip[0] }}", name: "{{ c_name[0] }}" }
+        - { ip: "{{ c_ip[1] }}", name: "{{ c_name[1] }}" }
+      become: yes
+
+    - name: Verify OpenHPC repository is enabled
+      command: dnf repolist
+      register: repolist_output
+      failed_when: "'OpenHPC' not in repolist_output.stdout"
+
+    - name: Disable firewall
+      systemd:
+        name: firewalld
+        state: stopped
+        enabled: no
+
+    - name: Install baseline OpenHPC packages
+      dnf:
+        name:
+          - ohpc-base
+          # - warewulf-ohpc                   # (commented out: Warewulf provisioning not needed for diskful nodes)
+          - hwloc-ohpc
+        state: present
+
+    - name: Enable NTP services on SMS host
+      systemd:
+        name: chronyd.service
+        enabled: yes
+
+    - name: Configure chrony.conf
+      lineinfile:
+        path: /etc/chrony.conf
+        line: "{{ item }}"
+        insertafter: EOF
+      loop:
+        - "local stratum 10"
+        - "server {{ ntp_server }}"
+        - "allow all"
+
+    - name: Restart chronyd
+      systemd:
+        name: chronyd
+        state: restarted
+
+    - name: Install Slurm server
+      dnf:
+        name: ohpc-slurm-server
+        state: present
+
+    - name: Copy Slurm configuration files
+      copy:
+        src: /etc/slurm/slurm.conf.custom
+        dest: /etc/slurm/slurm.conf
+        remote_src: yes
+
+    - name: Copy cgroup.conf
+      copy:
+        src: /etc/slurm/cgroup.conf.example
+        dest: /etc/slurm/cgroup.conf
+        remote_src: yes
+
+    - name: Update SlurmctldHost in slurm.conf
+      replace:
+        path: /etc/slurm/slurm.conf
+        regexp: 'SlurmctldHost=\S+'
+        replace: 'SlurmctldHost={{ sms_name }}'
+
+    # - name: Update node configuration for slurm.conf if enabled (commented out: update_slurm_nodeconfig: 0)
+      # block:
+        # - name: Comment out existing NodeName
+          # replace:
+            # path: /etc/slurm/slurm.conf
+            # regexp: '^NodeName=.+$'
+            # replace: '#'
+
+        # - name: Update Nodes in slurm.conf
+          # replace:
+            # path: /etc/slurm/slurm.conf
+            # regexp: ' Nodes=c\S+ '
+            # replace: ' Nodes={{ compute_prefix }}[1-{{ num_computes }}] '
+
+        # - name: Append slurm_node_config to slurm.conf
+          # lineinfile:
+            # path: /etc/slurm/slurm.conf
+            # line: "{{ slurm_node_config }}"
+            # insertafter: EOF
+      # when: update_slurm_nodeconfig | int == 1
+
+    # - name: Add InfiniBand support if enabled (commented out: enable_ib: 0)
+      # block:
+        # - name: Install InfiniBand Support group
+          # dnf:
+            # name: "@InfiniBand Support"
+            # state: present
+
+        # - name: Trigger udevadm
+          # command: udevadm trigger --type=devices --action=add
+
+        # - name: Restart rdma-load-modules
+          # systemd:
+            # name: rdma-load-modules@infiniband.service
+            # state: restarted
+      # when: enable_ib | int == 1
+
+    # - name: Enable opensm if enabled (commented out: enable_opensm: 0)
+      # block:
+        # - name: Install opensm
+          # dnf:
+            # name: opensm
+            # state: present
+
+        # - name: Enable and start opensm
+          # systemd:
+            # name: opensm
+            # enabled: yes
+            # state: started
+      # when: enable_opensm | int == 1
+
+    # - name: Enable IPoIB interface on SMS if enabled (commented out: enable_ipoib: 0)
+      # block:
+        # - name: Copy ifcfg-ib0
+          # copy:
+            # src: /opt/ohpc/pub/examples/network/centos/ifcfg-ib0
+            # dest: /etc/sysconfig/network-scripts/ifcfg-ib0
+            # remote_src: yes
+
+        # - name: Update sms_ipoib in ifcfg-ib0
+          # replace:
+            # path: /etc/sysconfig/network-scripts/ifcfg-ib0
+            # regexp: 'master_ipoib'
+            # replace: '{{ sms_ipoib }}'
+
+        # - name: Update ipoib_netmask in ifcfg-ib0
+          # replace:
+            # path: /etc/sysconfig/network-scripts/ifcfg-ib0
+            # regexp: 'ipoib_netmask'
+            # replace: '{{ ipoib_netmask }}'
+
+        # - name: Create NetworkManager conf
+          # copy:
+            # content: |
+              # [main]
+              # dns=none
+            # dest: /etc/NetworkManager/conf.d/90-dns-none.conf
+
+        # - name: Start NetworkManager
+          # systemd:
+            # name: NetworkManager
+            # state: started
+      # when: enable_ipoib | int == 1
+
+    # - name: Add Omni-Path support if enabled (commented out: enable_opa: 0)
+      # dnf:
+        # name: opa-basic-tools
+        # state: present
+      # when: enable_opa | int == 1
+
+    # - name: Enable OPA fabric manager if enabled (commented out: enable_opafm: 0)
+      # block:
+        # - name: Install opa-fm
+          # dnf:
+            # name: opa-fm
+            # state: present
+
+        # - name: Enable and start opafm
+          # systemd:
+            # name: opafm
+            # enabled: yes
+            # state: started
+      # when: enable_opafm | int == 1
+
+    # - name: Complete basic Warewulf setup (commented out: Warewulf provisioning not needed for diskful nodes)
+      # block:
+        # - name: Bring up internal interface
+          # command: ip link set dev {{ sms_eth_internal }} up
+
+        # - name: Add IP to internal interface
+          # command: ip address add {{ sms_ip }}/{{ internal_netmask }} broadcast + dev {{ sms_eth_internal }}
+
+        # - name: Update warewulf.conf ipaddr
+          # replace:
+            # path: /etc/warewulf/warewulf.conf
+            # regexp: 'ipaddr:.*'
+            # replace: 'ipaddr: {{ sms_ip }}'
+
+        # - name: Update warewulf.conf netmask
+          # replace:
+            # path: /etc/warewulf/warewulf.conf
+            # regexp: 'netmask:.*'
+            # replace: 'netmask: {{ internal_netmask }}'
+
+        # - name: Update warewulf.conf network
+          # replace:
+            # path: /etc/warewulf/warewulf.conf
+            # regexp: 'network:.*'
+            # replace: 'network: {{ internal_network }}'
+
+        # - name: Update warewulf.conf template
+          # replace:
+            # path: /etc/warewulf/warewulf.conf
+            # regexp: 'template:.*'
+            # replace: 'template: static'
+
+        # - name: Remove range start and end from warewulf.conf
+          # lineinfile:
+            # path: /etc/warewulf/warewulf.conf
+            # regexp: '{{ item }}'
+            # state: absent
+          # loop:
+            # - 'range start:'
+            # - 'range end:'
+
+        # - name: Update nodes.conf defaults
+          # replace:
+            # path: /etc/warewulf/nodes.conf
+            # regexp: 'defaults,noauto,nofail,ro'
+            # replace: 'defaults,nofail,ro'
+
+        # - name: Add Warewulf profile
+          # command: wwctl profile add nodes --profile default --comment "Nodes profile"
+
+        # - name: Create Warewulf overlay
+          # command: wwctl overlay create nodeconfig
+
+        # - name: Set Warewulf profile overlays
+          # command: wwctl profile set --yes nodes --system-overlays nodeconfig --runtime-overlays syncuser
+
+        # - name: Set Warewulf profile netname
+          # command: wwctl profile set -y nodes --netname=default --netdev={{ eth_provision }}
+
+        # - name: Set Warewulf profile netmask
+          # command: wwctl profile set -y nodes --netname=default --netmask={{ internal_netmask }}
+
+        # - name: Set Warewulf profile gateway
+          # command: wwctl profile set -y nodes --netname=default --gateway={{ ipv4_gateway }}
+
+        # - name: Set Warewulf profile DNS
+          # command: wwctl profile set -y nodes --netname=default --nettagadd=DNS={{ dns_servers }}
+
+        # - name: Update hosts.ww
+          # shell: |
+            # wwctl overlay cat host /etc/hosts.ww | sed -e 's_\({{$node.Id}}{{end}}\)_{{$node.Id}}.localdomain \1_g' | \
+            # EDITOR=tee wwctl overlay edit host /etc/hosts.ww
+
+        # - name: Enable warewulfd
+          # systemd:
+            # name: warewulfd
+            # enabled: yes
+            # state: started
+
+        # - name: Configure Warewulf all
+          # command: wwctl configure --all
+
+        # - name: Run ssh_setup.sh
+          # command: bash /etc/profile.d/ssh_setup.sh
+
+    # - name: Create compute image for Warewulf (commented out: Warewulf provisioning not needed for diskful nodes)
+      # command: wwctl image import docker://ghcr.io/warewulf/warewulf-rockylinux:9 rocky-9 --syncuser
+
+    # - name: Execute dnf install ohpc-release in image (commented out: image provisioning skipped)
+      # command: wwctl image exec --build=false rocky-9 /bin/bash -c "dnf -y install http://repos.openhpc.community/OpenHPC/3/EL_9/x86_64/ohpc-release-3-1.el9.x86_64.rpm && dnf -y update"
+
+    # - name: Set CHROOT variable (commented out: image provisioning skipped)
+      # set_fact:
+        # chroot: "{{ lookup('pipe', 'wwctl image show rocky-9') }}"
+
+    # - name: Add OpenHPC base components to compute image (commented out: image provisioning skipped)
+      # command: wwctl image exec --build=false rocky-9 /bin/bash -c "dnf -y install ohpc-base-compute"
+
+    # - name: Add Slurm and other components to compute image (commented out: image provisioning skipped)
+      # command: wwctl image exec --build=false rocky-9 /bin/bash -c |
+        # dnf -y install ohpc-slurm-client
+        # systemctl enable munge
+        # systemctl enable slurmd
+        # dnf -y install chrony
+        # dnf -y install lmod-ohpc
+
+    # - name: Handle Intel packages if enabled (commented out: enable_intel_packages: 0)
+      # block:
+        # - name: Create /opt/intel
+          # file:
+            # path: /opt/intel
+            # state: directory
+
+        # - name: Add to /etc/exports
+          # lineinfile:
+            # path: /etc/exports
+            # line: "/opt/intel *(ro,no_subtree_check,fsid=12)"
+            # insertafter: EOF
+
+        # - name: Add to fstab in chroot
+          # lineinfile:
+            # path: "{{ chroot }}/etc/fstab"
+            # line: "{{ sms_ip }}:/opt/intel /opt/intel nfs nfsvers=4,nodev 0 0"
+            # insertafter: EOF
+      # when: enable_intel_packages | int == 1
+
+    # - name: Update Slurm configuration for more computes (commented out: num_computes: 2 <= 4)
+      # block:
+        # - name: Update NodeName in slurm.conf
+          # replace:
+            # path: /etc/slurm/slurm.conf
+            # regexp: '^NodeName=(\S+)'
+            # replace: 'NodeName={{ compute_prefix }}[1-{{ num_computes }}]'
+
+        # - name: Update PartitionName in slurm.conf
+          # replace:
+            # path: /etc/slurm/slurm.conf
+            # regexp: '^PartitionName=normal Nodes=(\S+)'
+            # replace: 'PartitionName=normal Nodes={{ compute_prefix }}[1-{{ num_computes }}]'
+      # when: num_computes | int > 4
+
+    # - name: Add IB drivers to compute image if enabled (commented out: enable_ib: 0)
+      # dnf:
+        # name: "@InfiniBand Support"
+        # state: present
+        # installroot: "{{ chroot }}"
+      # when: enable_ib | int == 1
+
+    # - name: Add Omni-Path drivers to compute image if enabled (commented out: enable_opa: 0)
+      # block:
+        # - name: Install opa-basic-tools in chroot
+          # dnf:
+            # name: opa-basic-tools
+            # state: present
+            # installroot: "{{ chroot }}"
+
+        # - name: Install libpsm2 in chroot
+          # dnf:
+            # name: libpsm2
+            # state: present
+            # installroot: "{{ chroot }}"
+      # when: enable_opa | int == 1
+
+    - name: Update memlock settings
+      lineinfile:
+        path: "{{ item.path }}"
+        regexp: '# End of file'
+        line: "{{ item.line }}\n# End of file"
+        backrefs: yes
+      loop:
+        - { path: /etc/security/limits.conf, line: '* soft memlock unlimited' }
+        # - { path: /etc/security/limits.conf, line: '* hard memlock unlimited' } # (commented out: duplicate, keep if needed)
+        # - { path: "{{ chroot }}/etc/security/limits.conf", line: '* soft memlock unlimited' } # (commented out: chroot not used for diskful nodes)
+        # - { path: "{{ chroot }}/etc/security/limits.conf", line: '* hard memlock unlimited' } # (commented out: chroot not used for diskful nodes)
+
+    # - name: Enable slurm pam module in chroot (commented out: chroot not used for diskful nodes)
+      # lineinfile:
+        # path: "{{ chroot }}/etc/pam.d/sshd"
+        # line: "account    required     pam_slurm.so"
+        # insertafter: EOF
+
+    # - name: Enable BeeGFS client if enabled (commented out: enable_beegfs_client: 0)
+      # block:
+        # - name: Add BeeGFS repo
+          # command: dnf -y config-manager --add-repo https://www.beegfs.io/release/beegfs_7.4.5/dists/beegfs-rhel9.repo
+
+        # - name: Install BeeGFS dependencies
+          # dnf:
+            # name:
+              # - kernel-devel
+              # - gcc
+              # - elfutils-libelf-devel
+            # state: present
+
+        # - name: Install BeeGFS packages
+          # dnf:
+            # name:
+              # - beegfs-client
+              # - beegfs-helperd
+              # - beegfs-utils
+            # state: present
+
+        # - name: Update beegfs-client-autobuild.conf
+          # replace:
+            # path: /etc/beegfs/beegfs-client-autobuild.conf
+            # regexp: '^buildArgs=-j8'
+            # replace: 'buildArgs=-j8 BEEGFS_OPENTK_IBVERBS=1'
+
+        # - name: Setup BeeGFS client
+          # command: /opt/beegfs/sbin/beegfs-setup-client -m {{ sysmgmtd_host }}
+
+        # - name: Start BeeGFS services
+          # systemd:
+            # name: "{{ item }}"
+            # state: started
+          # loop:
+            # - beegfs-helperd
+            # - beegfs-client
+
+        # - name: Add BeeGFS repo to chroot
+          # command: dnf --installroot={{ chroot }} config-manager --add-repo https://www.beegfs.io/release/beegfs_7.4.5/dists/beegfs-rhel9.repo
+
+        # - name: Install BeeGFS in chroot
+          # dnf:
+            # name:
+              # - beegfs-client
+              # - beegfs-helperd
+              # - beegfs-utils
+            # state: present
+            # installroot: "{{ chroot }}"
+
+        # - name: Disable autobuild in chroot
+          # replace:
+            # path: "{{ chroot }}/etc/beegfs/beegfs-client-autobuild.conf"
+            # regexp: '^buildEnabled=true'
+            # replace: 'buildEnabled=false'
+
+        # - name: Remove force-auto-build in chroot
+          # file:
+            # path: "{{ chroot }}/var/lib/beegfs/client/force-auto-build"
+            # state: absent
+
+        # - name: Enable BeeGFS services in chroot
+          # command: chroot {{ chroot }} systemctl enable {{ item }}
+          # loop:
+            # - beegfs-helperd
+            # - beegfs-client
+
+        # - name: Copy beegfs-client.conf to chroot
+          # copy:
+            # src: /etc/beegfs/beegfs-client.conf
+            # dest: "{{ chroot }}/etc/beegfs/beegfs-client.conf"
+            # remote_src: yes
+
+        # - name: Add beegfs to bootstrap.conf
+          # lineinfile:
+            # path: /etc/warewulf/bootstrap.conf
+            # line: "drivers += beegfs"
+            # insertafter: EOF
+      # when: enable_beegfs_client | int == 1
+
+    # - name: Enable Lustre client if enabled (commented out: enable_lustre_client: 0)
+      # block:
+        # - name: Install Lustre client on master
+          # dnf:
+            # name: lustre-client-ohpc
+            # state: present
+
+        # - name: Install Lustre client in chroot
+          # dnf:
+            # name: lustre-client-ohpc
+            # state: present
+            # installroot: "{{ chroot }}"
+
+        # - name: Create /mnt/lustre in chroot
+          # file:
+            # path: "{{ chroot }}/mnt/lustre"
+            # state: directory
+
+        # - name: Add Lustre to fstab in chroot
+          # lineinfile:
+            # path: "{{ chroot }}/etc/fstab"
+            # line: "{{ mgs_fs_name }} /mnt/lustre lustre defaults,localflock,noauto,x-systemd.automount 0 0"
+            # insertafter: EOF
+
+        # - name: Add lnet options to modprobe.d on master
+          # lineinfile:
+            # path: /etc/modprobe.d/lustre.conf
+            # line: "options lnet networks=o2ib(ib0)"
+            # create: yes
+
+        # - name: Add lnet options to modprobe.d in chroot
+          # lineinfile:
+            # path: "{{ chroot }}/etc/modprobe.d/lustre.conf"
+            # line: "options lnet networks=o2ib(ib0)"
+            # create: yes
+
+        # - name: Create /mnt/lustre on master
+          # file:
+            # path: /mnt/lustre
+            # state: directory
+
+        # - name: Mount Lustre on master
+          # mount:
+            # path: /mnt/lustre
+            # src: "{{ mgs_fs_name }}"
+            # fstype: lustre
+            # opts: localflock
+            # state: mounted
+      # when: enable_lustre_client | int == 1
+
+    # - name: Enable NVIDIA GPU driver if enabled (commented out: enable_nvidia_gpu_driver: 0)
+      # block:
+        # - name: Install CUDA repo
+          # dnf:
+            # name: cuda-repo-ohpc
+            # state: present
+
+        # - name: Install NVIDIA driver and CUDA devel
+          # dnf:
+            # name:
+              # - nvidia-driver-cuda
+              # - cuda-devel-ohpc
+            # state: present
+
+        # - name: Install NVIDIA driver in image
+          # command: wwctl image exec --build=false rocky-9 /bin/bash -c |
+            # dnf -y install cuda-repo-ohpc
+            # dnf -y module install nvidia-driver:latest-dkms
+            # KVER=$(rpm -q --queryformat='%{version}-%{release}.%{arch}\n' kernel-core | sort -r | head -1)
+            # dkms autoinstall --verbose -k ${KVER}
+            # dkms status
+      # when: enable_nvidia_gpu_driver | int == 1
+
+    - name: Configure rsyslog on SMS and computes
+      block:
+        - name: Add imudp to ohpc.conf
+          lineinfile:
+            path: /etc/rsyslog.d/ohpc.conf
+            line: "{{ item }}"
+            create: yes
+          loop:
+            - 'module(load="imudp")'
+            - 'input(type="imudp" port="514")'
+
+        - name: Restart rsyslog
+          systemd:
+            name: rsyslog
+            state: restarted
+
+        # - name: Add omfwd to rsyslog.conf in chroot (commented out: chroot not used for diskful nodes)
+          # lineinfile:
+            # path: "{{ chroot }}/etc/rsyslog.conf"
+            # line: '*.* action(type="omfwd" Target="{{ sms_ip }}" Port="514" Protocol="udp")'
+            # insertafter: EOF
+
+        # - name: Comment out lines in rsyslog.conf in chroot (commented out: chroot not used for diskful nodes)
+          # replace:
+            # path: "{{ chroot }}/etc/rsyslog.conf"
+            # regexp: '{{ item.regexp }}'
+            # replace: '{{ item.replace }}'
+          # loop:
+            # - { regexp: '^\*\.info', replace: '#*.info' }
+            # - { regexp: '^authpriv', replace: '#authpriv' }
+            # - { regexp: '^mail', replace: '#mail' }
+            # - { regexp: '^cron', replace: '#cron' }
+            # - { regexp: '^uucp', replace: '#uucp' }
+
+    # - name: Enable clustershell if enabled (commented out: enable_clustershell: 0)
+      # block:
+        # - name: Install clustershell
+          # dnf:
+            # name: clustershell
+            # state: present
+
+        # - name: Configure clustershell groups
+          # copy:
+            # content: |
+              # adm: {{ sms_name }}
+              # compute: {{ compute_prefix }}[1-{{ num_computes }}]
+              # all: @adm,@compute
+            # dest: /etc/clustershell/groups.d/local.cfg
+      # when: enable_clustershell | int == 1
+
+    # - name: Enable genders if enabled (commented out: enable_genders: 0)
+      # block:
+        # - name: Install genders
+          # dnf:
+            # name: genders-ohpc
+            # state: present
+
+        # - name: Configure /etc/genders
+          # copy:
+            # content: |
+              # {{ sms_name }} sms
+              # {% for i in range(num_computes) %}
+              # {{ c_name[i] }} compute,bmc={{ c_bmc[i] }}
+              # {% endfor %}
+            # dest: /etc/genders
+      # when: enable_genders | int == 1
+
+    # - name: Enable magpie if enabled (commented out: enable_magpie: 0)
+      # dnf:
+        # name: magpie-ohpc
+        # state: present
+      # when: enable_magpie | int == 1
+
+    # - name: Enable conman and IPMI sol if enabled (commented out: enable_ipmisol: 0)
+      # block:
+        # - name: Install conman
+          # dnf:
+            # name: conman-ohpc
+            # state: present
+
+        # - name: Configure conman.conf
+          # lineinfile:
+            # path: /etc/conman.conf
+            # line: |
+              # {% for i in range(num_computes) %}
+              # CONSOLE name="{{ c_name[i] }}" dev="ipmi:{{ c_bmc[i] }}" ipmiopts="U:{{ bmc_username }},P:{{ bmc_password }},W:solpayloadsize"
+              # {% endfor %}
+            # insertafter: EOF
+
+        # - name: Enable and start conman
+          # systemd:
+            # name: conman
+            # enabled: yes
+            # state: started
+      # when: enable_ipmisol | int == 1
+
+    - name: Install and configure NHC
+      block:
+        - name: Install nhc on SMS
+          dnf:
+            name: nhc-ohpc
+            state: present
+
+        # - name: Install nhc in chroot (commented out: chroot not used for diskful nodes)
+          # dnf:
+            # name: nhc-ohpc
+            # state: present
+            # installroot: "{{ chroot }}"
+
+        - name: Add HealthCheckProgram to slurm.conf
+          lineinfile:
+            path: /etc/slurm/slurm.conf
+            line: "HealthCheckProgram=/usr/sbin/nhc"
+            insertafter: EOF
+
+        - name: Add HealthCheckInterval to slurm.conf
+          lineinfile:
+            path: /etc/slurm/slurm.conf
+            line: "HealthCheckInterval=300"
+            insertafter: EOF
+
+    # - name: Update compute image for geopm if enabled (commented out: enable_geopm: 0)
+      # set_fact:
+        # kargs: "{{ kargs }} intel_pstate=disable"
+      # when: enable_geopm | int == 1
+
+    # - name: Install geopm packages in chroot if enabled (commented out: enable_geopm: 0)
+      # dnf:
+        # name:
+          # - kmod-msr-safe-ohpc
+          # - msr-safe-ohpc
+          # - msr-safe-slurm-ohpc
+        # state: present
+        # installroot: "{{ chroot }}"
+      # when: enable_geopm | int == 1
+
+    # - name: Import files for Warewulf overlays (commented out: Warewulf overlays not needed for diskful nodes)
+      # block:
+        # - name: Import subuid and subgid
+          # command: wwctl overlay import --parents nodeconfig {{ item }}
+          # loop:
+            # - /etc/subuid
+            # - /etc/subgid
+
+        # - name: Import chrony.conf.ww
+          # shell: echo 'server {{.Tags.ntpserver}} iburst' | wwctl overlay import --parents nodeconfig <(cat) /etc/chrony.conf.ww
+
+        # - name: Set ntpserver tag
+          # command: wwctl profile set --yes nodes --tagadd ntpserver={{ sms_ip }}
+
+        # - name: Import NetworkManager override.conf
+          # shell: |
+            # cat <<- EOF | wwctl overlay import --parents nodeconfig <(cat) /etc/systemd/system/NetworkManager-wait-online.service.d/override.conf
+            # [Service]
+            # ExecStart=
+            # ExecStart=/usr/bin/nm-online -q
+            # EOF
+
+        # - name: Import slurmd.ww
+          # shell: echo SLURMD_OPTIONS='--conf-server {{.Tags.slurmctld}}' | wwctl overlay import --parents nodeconfig <(cat) /etc/sysconfig/slurmd.ww
+
+        # - name: Set slurmctld tag
+          # command: wwctl profile set --yes nodes --tagadd slurmctld={{ sms_ip }}
+
+        # - name: Import munge.key
+          # command: wwctl overlay import --parents nodeconfig /etc/munge/munge.key
+
+        # - name: Chown munge.key
+          # command: wwctl overlay chown nodeconfig /etc/munge/munge.key $(id -u munge) $(id -g munge)
+
+        # - name: Chown munge directory
+          # command: wwctl overlay chown nodeconfig /etc/munge $(id -u munge) $(id -g munge)
+
+        # - name: Chmod munge directory
+          # command: wwctl overlay chmod nodeconfig /etc/munge 0700
+
+    # - name: Import ifcfg-ib0.ww if IPoIB enabled (commented out: enable_ipoib: 0)
+      # command: wwctl overlay import --parents nodeconfig /opt/ohpc/pub/examples/network/centos/ifcfg-ib0.ww /etc/sysconfig/network-scripts/ifcfg-ib0.ww
+      # when: enable_ipoib | int == 1
+
+    # - name: Assemble bootstrap image (commented out: Warewulf provisioning not needed for diskful nodes)
+      # command: wwctl image build rocky-9
+
+    # - name: Build overlays (commented out: Warewulf provisioning not needed for diskful nodes)
+      # command: wwctl overlay build
+
+    # - name: Add hosts to cluster (commented out: Warewulf provisioning not needed for diskful nodes)
+      # command: wwctl node add --image=rocky-9 --profile=nodes --netname=default --ipaddr={{ c_ip[item] }} --hwaddr={{ c_mac[item] }} {{ c_name[item] }}
+      # loop: "{{ range(0, num_computes | int) | list }}"
+
+    # - name: Build overlays again (commented out: Warewulf provisioning not needed for diskful nodes)
+      # command: wwctl overlay build
+
+    # - name: Configure Warewulf all again (commented out: Warewulf provisioning not needed for diskful nodes)
+      # command: wwctl configure --all
+
+    - name: Enable and start munge and slurmctld
+      systemd:
+        name: "{{ item }}"
+        enabled: yes
+        state: started
+      loop:
+        - munge
+        - slurmctld
+
+    # - name: Add kernel args if enabled (commented out: enable_kargs: 0)
+      # command: wwctl profile set --yes nodes --kernelargs="{{ kargs }}"
+      # when: enable_kargs | int == 1
+
+    # - name: Boot compute nodes (commented out: no BMC/IPMI in VM setup)
+      # command: ipmitool -E -I lanplus -H {{ c_bmc[item] }} -U {{ bmc_username }} -P {{ bmc_password }} chassis power reset
+      # loop: "{{ range(0, num_computes | int) | list }}"
+
+    - name: Install Development Tools
+      dnf:
+        name:
+          - ohpc-autotools
+          - EasyBuild-ohpc
+          - hwloc-ohpc
+          - spack-ohpc
+          - valgrind-ohpc
+        state: present
+
+    - name: Install Compilers
+      dnf:
+        name: gnu14-compilers-ohpc
+        state: present
+
+    - name: Install MPI Stacks
+      block:
+        - name: Install default MPI
+          dnf:
+            name:
+              - openmpi5-pmix-gnu14-ohpc
+              - mpich-ofi-gnu14-ohpc
+            state: present
+          when: enable_mpi_defaults | int == 1
+
+        # - name: Install mvapich2 for IB (commented out: enable_ib: 0)
+          # dnf:
+            # name: mvapich2-gnu14-ohpc
+            # state: present
+          # when: enable_ib | int == 1
+
+        # - name: Install mvapich2 for OPA (commented out: enable_opa: 0)
+          # dnf:
+            # name: mvapich2-psm2-gnu14-ohpc
+            # state: present
+          # when: enable_opa | int == 1
+
+    - name: Install Performance Tools
+      dnf:
+        name: ohpc-gnu14-perf-tools
+        state: present
+
+    # - name: Install geopm perf tools if enabled (commented out: enable_geopm: 0)
+      # dnf:
+        # name: ohpc-gnu14-geopm
+        # state: present
+      # when: enable_geopm | int == 1
+
+    - name: Install lmod defaults
+      dnf:
+        name: lmod-defaults-gnu14-openmpi5-ohpc
+        state: present
+
+    - name: Install 3rd Party Libraries and Tools
+      dnf:
+        name:
+          - ohpc-gnu14-serial-libs
+          - ohpc-gnu14-io-libs
+          - ohpc-gnu14-python-libs
+          - ohpc-gnu14-runtimes
+        state: present
+
+    - name: Install parallel libs if MPI defaults enabled
+      dnf:
+        name:
+          - ohpc-gnu14-mpich-parallel-libs
+          - ohpc-gnu14-openmpi5-parallel-libs
+        state: present
+      when: enable_mpi_defaults | int == 1
+
+    # - name: Install mvapich2 parallel libs for IB (commented out: enable_ib: 0)
+      # dnf:
+        # name: ohpc-gnu14-mvapich2-parallel-libs
+        # state: present
+      # when: enable_ib | int == 1
+
+    # - name: Install mvapich2 parallel libs for OPA (commented out: enable_opa: 0)
+      # dnf:
+        # name: ohpc-gnu14-mvapich2-parallel-libs
+        # state: present
+      # when: enable_opa | int == 1
+
+    # - name: Install Intel oneAPI tools if enabled (commented out: enable_intel_packages: 0)
+      # block:
+        # - name: Install oneAPI toolkit release
+          # dnf:
+            # name: intel-oneapi-toolkit-release-ohpc
+            # state: present
+
+        # - name: Import Intel GPG key
+          # rpm_key:
+            # key: https://yum.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB
+            # state: present
+
+        # - name: Install Intel compilers and MPI
+          # dnf:
+            # name:
+              # - intel-compilers-devel-ohpc
+              # - intel-mpi-devel-ohpc
+            # state: present
+
+        # - name: Install mvapich2 for OPA with Intel
+          # dnf:
+            # name: mvapich2-psm2-intel-ohpc
+            # state: present
+          # when: enable_opa | int == 1
+
+        # - name: Install openmpi5 with Intel
+          # dnf:
+            # name: openmpi5-pmix-intel-ohpc
+            # state: present
+
+        # - name: Install Intel libs and tools
+          # dnf:
+            # name:
+              # - ohpc-intel-serial-libs
+              # - ohpc-intel-geopm
+              # - ohpc-intel-io-libs
+              # - ohpc-intel-perf-tools
+              # - ohpc-intel-python3-libs
+              # - ohpc-intel-mpich-parallel-libs
+              # - ohpc-intel-mvapich2-parallel-libs
+              # - ohpc-intel-openmpi5-parallel-libs
+              # - ohpc-intel-impi-parallel-libs
+            # state: present
+      # when: enable_intel_packages | int == 1
+
+    - name: Wait for provisioning
+      pause:
+        seconds: "{{ provision_wait }}"
+
+    - name: Resource Manager Startup
+      block:
+        - name: Enable and start munge and slurmctld
+          systemd:
+            name: "{{ item }}"
+            enabled: yes
+            state: started
+          loop:
+            - munge
+            - slurmctld
+
+        # - name: Start munge on computes (commented out: pdsh requires clustershell, disabled, workers configured in separate play)
+          # command: pdsh -w {{ compute_prefix }}[1-{{ num_computes }}] systemctl start munge
+
+        # - name: Start slurmd on computes (commented out: pdsh requires clustershell, disabled, workers configured in separate play)
+          # command: pdsh -w {{ compute_prefix }}[1-{{ num_computes }}] systemctl start slurmd
+
+    # - name: Optionally generate nhc config (commented out: optional, not essential for basic setup)
+      # command: pdsh -w c1 "/usr/sbin/nhc-genconf -H '*' -c -" | dshbak -c
+
+    - name: Add test user
+      user:
+        name: test
+        create_home: yes
+
+    # - name: Build overlays final (commented out: Warewulf provisioning not needed for diskful nodes)
+      # command: wwctl overlay build
+
+    - name: Sleep 90 seconds
+      pause:
+        seconds: 90
+
+- name: Configure Slurm on Workers
+  hosts: workers
+  become: true
+  vars_files:
+    - input.yml
+  tasks:
+    - name: Install OpenHPC release package (contains repo + GPG key)
+      ansible.builtin.dnf:
+        name: http://repos.openhpc.community/OpenHPC/3/EL_9/x86_64/ohpc-release-3-1.el9.x86_64.rpm
+        state: present
+        disable_gpg_check: yes
+
+    - name: Clean and refresh metadata
+      ansible.builtin.command: dnf clean all
+      become: true
+
+    - name: Make sure GPG key is imported (belt-and-suspenders)
+      ansible.builtin.rpm_key:
+        key: /etc/pki/rpm-gpg/RPM-GPG-KEY-OpenHPC-3
+        state: present
+      become: true
+      ignore_errors: yes  # in case key already exists
+
+    - name: Install Slurm client
+      ansible.builtin.dnf:
+        name: ohpc-slurm-client
+        state: present
+
+    - name: Copy slurm.conf from master to workers
+      ansible.builtin.copy:
+        src: /etc/slurm/slurm.conf
+        dest: /etc/slurm/slurm.conf
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Enable and start munge and slurmd
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        enabled: yes
+        state: started
+      loop:
+        - munge
+        - slurmd

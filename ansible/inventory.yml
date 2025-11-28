@@ -1,0 +1,6 @@
+[master]
+localhost ansible_connection=local ansible_python_interpreter=/usr/bin/python3
+
+[workers]
+192.168.90.11 ansible_user=f228755 ansible_ssh_private_key_file=/home/f228755/.ssh/id_rsa
+192.168.90.12 ansible_user=f228755 ansible_ssh_private_key_file=/home/f228755/.ssh/id_rsa
