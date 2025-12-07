@@ -44,12 +44,18 @@ export default function RemoteNodes() {
     }, []);
 
     const handleWorkerCount = (e) => {
-        const count = parseInt(e.target.value, 10);
-        setWorkerCount(count);
-        setWorkerNodes(
-            Array.from({ length: count }, () => ({ name: "", ip_address: "" }))
-        );
-    };
+	const value = e.target.value;
+	const count = parseInt(value, 10);
+
+	// If input is empty, use ""
+	setWorkerCount(isNaN(count) ? "" : count);
+
+	setWorkerNodes(
+	Array.from({ length: isNaN(count) ? 0 : count }, () => ({ name: "", ip_address: "" }))
+	);
+     };
+
+
 
     const handleMasterChange = (e) => {
         setMasterNode({ ...masterNode, [e.target.name]: e.target.value });
@@ -62,24 +68,29 @@ export default function RemoteNodes() {
     };
 
     const connectNode = async (node, index, type) => {
-        try {
-            const res = await axios.post(`${API_BASE_URL}/nodes/connect`, {
-                name: node.name,
-                ip: node.ip_address,
-                type,
-            });
-	    console.log("ip: ",node.ip_address);
-            setStatuses((prev) => ({
-                ...prev,
-                [`${type}-${index}`]: res.data.status,
-            }));
-        } catch (error) {
-            setStatuses((prev) => ({
-                ...prev,
-                [`${type}-${index}`]: "Failed to Connect",
-            }));
-        }
+        const payload = {
+        name: node.name,
+        ip: node.ip_address,
+        type,
     };
+
+
+    try {
+        const res = await axios.post(`${API_BASE_URL}/nodes/connect`, payload);
+
+        setStatuses(prev => ({
+            ...prev,
+            [`${type}-${index}`]: res.data.status,
+        }));
+    } catch (error) {
+        setStatuses(prev => ({
+            ...prev,
+            [`${type}-${index}`]: error?.response?.data?.message || "Failed to Connect",
+        }));
+    }
+};
+
+
 
     const resetNodes = async () => {
         try {
@@ -121,7 +132,7 @@ export default function RemoteNodes() {
                                 type="text"
                                 name="name"
                                 placeholder="Enter node name"
-                                value={masterNode.name}
+                                value={masterNode.name || ""}
                                 onChange={handleMasterChange}
                                 required
                             />
@@ -133,7 +144,7 @@ export default function RemoteNodes() {
                                 type="text"
                                 name="ip_address"
                                 placeholder="Enter IP address"
-                                value={masterNode.ip_address}
+                                value={masterNode.ip_address || ""}
                                 onChange={handleMasterChange}
                                 required
                             />
@@ -164,7 +175,7 @@ export default function RemoteNodes() {
                             id="worker-count"
                             type="number"
                             placeholder="Set node count"
-                            value={workerCount}
+                            value={workerCount || ""}
                             onChange={handleWorkerCount}
                             min="0"
                         />
@@ -182,7 +193,7 @@ export default function RemoteNodes() {
                                             id={`worker-${index}-name`}
                                             type="text"
                                             placeholder="Enter node name"
-                                            value={worker.name}
+                                            value={worker.name || ""}
                                             onChange={(e) =>
                                                 handleWorkerChange(index, "name", e.target.value)
                                             }
@@ -195,7 +206,7 @@ export default function RemoteNodes() {
                                             id={`worker-${index}-ip`}
                                             type="text"
                                             placeholder="Enter IP address"
-                                            value={worker.ip_address}
+                                            value={worker.ip_address || ""}
                                             onChange={(e) =>
                                                 handleWorkerChange(index, "ip_address", e.target.value)
                                             }

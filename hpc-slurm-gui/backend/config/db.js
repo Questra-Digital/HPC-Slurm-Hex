@@ -47,7 +47,7 @@ const UserGroup = sequelize.define("UserGroup", {
 
 const Node = sequelize.define("Node", {
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
-    name: { type: DataTypes.STRING(100), allowNull: false, unique: true },
+    name: { type: DataTypes.STRING(100), allowNull: false},
     ip_address: { type: DataTypes.STRING(45), allowNull: false, unique: true },
     node_type: {
         type: DataTypes.STRING(10),

@@ -1,8 +1,10 @@
 const express = require("express");
 const axios = require("axios");
 const { Node } = require("../config/db");
+const path = require('path');
+require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 const router = express.Router();
-
+const port=process.env.SLURM_PORT
 router.post("/connect", async (req, res) => {
     const { name, ip, type } = req.body;
 
@@ -11,7 +13,7 @@ router.post("/connect", async (req, res) => {
     }
 
     try {
-        const response = await axios.get(`http://${ip}:5050/connect`, { timeout: 5000 });
+        const response = await axios.get(`http://${ip}:${port}/connect`, { timeout: 5000 });
 
         if (response.status !== 200 || !response.data || response.data.status !== "active") {
             return res.status(500).json({ status: "Failed", message: "Node health check failed" });
@@ -45,7 +47,12 @@ router.post("/connect", async (req, res) => {
 
         return res.json({ status: created ? "Node created" : "Node updated", node });
     } catch (error) {
-        return res.status(500).json({ status: "Failed", message: "Could not connect to node", error: error.message });
+    console.error("NODE CONNECT ERROR:", error);
+    return res.status(500).json({
+        status: "Failed",
+        message: "Could not connect to node",
+        error: error.message
+    });
     }
 });
 
