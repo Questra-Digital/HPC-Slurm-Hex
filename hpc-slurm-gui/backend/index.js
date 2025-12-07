@@ -6,6 +6,7 @@ const resourceRoutes = require("./routes/resources");
 const userRoutes = require("./routes/users");
 const nodesRoutes = require("./routes/nodes");
 const jobsRoutes = require("./routes/jobs");
+const emailRoutes = require("./routes/email");
 
 dotenv.config();
 const app = express();
@@ -18,7 +19,8 @@ app.use("/api/auth", authRoutes);
 app.use("/api/resources", resourceRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/nodes", nodesRoutes);
-app.use("/api/jobs", jobsRoutes); 
+app.use("/api/jobs", jobsRoutes);
+app.use("/api/email", emailRoutes);
 
 const PORT = process.env.PORT;
 
