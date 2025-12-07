@@ -7,8 +7,8 @@ export default defineConfig({
     host: '0.0.0.0',       // listen on all interfaces inside container
     port: 5051,
     hmr: {
-      host: 'localhost', // <-- external IP your browser uses
-      //host: '59.103.246.24', // <-- external IP your browser uses
+      //host: 'localhost', // <-- external IP your browser uses
+      host: '59.103.246.24', // <-- external IP your browser uses
       protocol: 'ws',         // 'ws' for HTTP, 'wss' for HTTPS
     },
     watch: {
