@@ -11,8 +11,8 @@ app = Flask(__name__)
 CORS(app) 
 
 # Declare global variables for FTP credentials
-FTP_USER = "u604307358"
-FTP_PASSWORD = "PassWord$2024"
+FTP_USER = "f228755"
+FTP_PASSWORD = "au2255"
 
 HOME_DIR = os.path.expanduser("~")
 JOBS_DIR = os.path.join(HOME_DIR, "jobs")
@@ -44,22 +44,33 @@ def zip_all_jobs():
     try:
         if not os.path.exists(JOBS_DIR):
             return
-        os.chdir(JOBS_DIR)
         for job_id in os.listdir(JOBS_DIR):
+            # Skip non-numeric folders (like 'myenv', '.git', etc.)
+            if not job_id.isdigit():
+                continue
+                
             job_folder = os.path.join(JOBS_DIR, job_id)
             if os.path.isdir(job_folder):
-                zip_filename = f"{job_id}.zip"
+                zip_filepath = os.path.join(JOBS_DIR, job_id)  # shutil adds .zip
+                zip_filename = f"{zip_filepath}.zip"
+                
+                # Check if we have write permission
+                if not os.access(JOBS_DIR, os.W_OK):
+                    continue
+                    
                 if is_job_running(job_id):
-                    print(f"Skipping {job_id} - still running")
+                    # Skip running jobs silently
                     continue
                 if not os.path.exists(zip_filename) or os.path.getmtime(job_folder) > os.path.getmtime(zip_filename):
-                    subprocess.run(
-                        ["zip", "-r", zip_filename, job_id],
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE,
-                        check=True
-                    )
-                    print(f"Background zipped {job_id}")
+                    try:
+                        # Use Python's built-in shutil instead of external zip command
+                        shutil.make_archive(zip_filepath, 'zip', JOBS_DIR, job_id)
+                        print(f"Background zipped {job_id}")
+                    except PermissionError:
+                        # Silently skip permission errors
+                        pass
+                    except Exception as zip_error:
+                        print(f"Failed to zip {job_id}: {zip_error}")
     except Exception as e:
         print(f"Error in background zipping: {e}")
 
@@ -186,3 +197,4 @@ def health_check():
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5053)
+
