@@ -4,7 +4,6 @@ import axios from "axios";
 import Swal from 'sweetalert2';
 
 import { API_BASE_URL } from "../config";
-import {MASTER_PORT} from "../config";
 
 export default function JobsPage({ user }) {
   const [jobs, setJobs] = useState([]);
@@ -18,13 +17,14 @@ export default function JobsPage({ user }) {
   const [selectedNodeId, setSelectedNodeId] = useState("");
   const [cpuRequest, setCpuRequest] = useState("");
   const [gpuRequest, setGpuRequest] = useState("");
-  const [memoryRequest, setMemoryRequest] = useState(""); 
+  const [memoryRequest, setMemoryRequest] = useState("");
   const [username] = useState(sessionStorage.getItem("username") || "null");
   const [userRole] = useState(sessionStorage.getItem("user_role") || "user");
   const [userId] = useState(sessionStorage.getItem("id") || "null");
   const [email] = useState(sessionStorage.getItem('email') || "null");
   const [nextJobId, setNextJobId] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false); // Separate state for submit button
   const [resourceLimits, setResourceLimits] = useState({
     max_cpu: 0,
     max_gpu: 0,
@@ -33,7 +33,7 @@ export default function JobsPage({ user }) {
   const [resourceContext, setResourceContext] = useState("user");
   const [selectedGroupId, setSelectedGroupId] = useState("");
   const [userGroups, setUserGroups] = useState([]);
-  const [masterNodeIp, setMasterNodeIp] = useState(null);
+  const [masterNodeConnected, setMasterNodeConnected] = useState(false);
 
   const fileInputRef = useRef(null);
 
@@ -45,41 +45,41 @@ export default function JobsPage({ user }) {
   };
 
   useEffect(() => {
-    fetchMasterNodeIp();
+    checkMasterConnection();
   }, []);
 
   useEffect(() => {
-    if (!masterNodeIp) return;
-  
+    if (!masterNodeConnected) return;
+
     const interval = setInterval(() => {
       fetchJobs();
     }, 3000); // every 3 seconds
-  
-    fetchJobs();
-  
-    return () => clearInterval(interval);
-  }, [masterNodeIp]);
 
-  const fetchMasterNodeIp = async () => {
+    fetchJobs();
+
+    return () => clearInterval(interval);
+  }, [masterNodeConnected]);
+
+  const checkMasterConnection = async () => {
     try {
       const response = await axios.get(`${API_BASE_URL}/nodes/get-nodes-list`);
       const nodes = response.data;
       const masterNode = nodes.find(node => node.node_type === "master");
       if (masterNode) {
-        setMasterNodeIp(masterNode.ip_address);
+        setMasterNodeConnected(true);
       }
     } catch (error) {
-      console.error("Failed to fetch master node IP:", error);
+      console.error("Failed to check master node connection:", error);
     }
   };
-  
+
   const fetchInitialData = async () => {
-    if (!masterNodeIp) return;
+    if (!masterNodeConnected) return;
 
     try {
       setIsLoading(true);
       const [jobsRes, nodesRes, groupsRes] = await Promise.all([
-        axios.get(`http://${masterNodeIp}:${MASTER_PORT}/jobs`),
+        axios.get(`${API_BASE_URL}/jobs/slurm-jobs`),
         axios.get(`${API_BASE_URL}/nodes/get-nodes-list`),
         axios.get(`${API_BASE_URL}/users/users/${userId}/groups`),
       ]);
@@ -121,12 +121,12 @@ export default function JobsPage({ user }) {
   };
 
   const fetchJobs = async () => {
-    if (!masterNodeIp) return;
-  
+    if (!masterNodeConnected) return;
+
     try {
-      const jobsRes = await axios.get(`http://${masterNodeIp}:${MASTER_PORT}/jobs`);
+      const jobsRes = await axios.get(`${API_BASE_URL}/jobs/slurm-jobs`);
       const newJobs = jobsRes.data.jobs || [];
-  
+
       if (newJobs.length !== jobs.length) {
         setJobs(newJobs);
       }
@@ -136,10 +136,10 @@ export default function JobsPage({ user }) {
   };
 
   useEffect(() => {
-    if (masterNodeIp) {
+    if (masterNodeConnected) {
       fetchInitialData();
     }
-  }, [masterNodeIp]);
+  }, [masterNodeConnected]);
 
   const filterJobs = (state) => {
     return jobs.filter((job) => {
@@ -160,30 +160,35 @@ export default function JobsPage({ user }) {
     const gpu = parseInt(gpuRequest) || 0;
     const memory = parseFloat(memoryRequest) || 0;
 
-    if (!selectedNodeId) {
-      showAlert("warning", "Node Selection", "Please select a node.");
-      return false;
-    }
-
+    // Check against user/group resource limits
     if (cpu > resourceLimits.max_cpu || gpu > resourceLimits.max_gpu || memory > resourceLimits.max_memory) {
       showAlert("warning", "Resource Limit Exceeded",
         `Requested resources (CPU: ${cpu}/${resourceLimits.max_cpu}, GPU: ${gpu}/${resourceLimits.max_gpu}, Memory: ${memory}/${resourceLimits.max_memory} GB) exceed your limits.`);
       return false;
     }
 
-    const selectedNode = nodes.find(node => node.id === parseInt(selectedNodeId));
-    if (!selectedNode || cpu > selectedNode.cpu_count || gpu > (selectedNode.gpu_count || 0) || memory > (selectedNode.total_memory_gb || 0)) {
-      showAlert("warning", "Node Capacity Exceeded",
-        `Requested resources exceed node capacity (CPU: ${cpu}/${selectedNode.cpu_count}, GPU: ${gpu}/${selectedNode.gpu_count || 0}, Memory: ${memory}/${selectedNode.total_memory_gb || 0} GB).`);
-      return false;
+    // If a specific node is selected, validate against that node's capacity
+    if (selectedNodeId) {
+      const selectedNode = nodes.find(node => node.id === parseInt(selectedNodeId));
+      if (selectedNode && (cpu > selectedNode.cpu_count || gpu > (selectedNode.gpu_count || 0) || memory > (selectedNode.total_memory_gb || 0))) {
+        showAlert("warning", "Node Capacity Exceeded",
+          `Requested resources exceed node capacity (CPU: ${cpu}/${selectedNode.cpu_count}, GPU: ${gpu}/${selectedNode.gpu_count || 0}, Memory: ${selectedNode.total_memory_gb || 0} GB).`);
+        return false;
+      }
     }
 
     return true;
   };
 
   const handleSubmitJob = async () => {
-    if (!jobName || !source || !selectedNodeId || !cpuRequest || !memoryRequest) {
-      showAlert("warning", "Incomplete Form", "Please fill out all required fields.");
+    // Node selection is now optional - Slurm will handle scheduling
+    if (!jobName || !source || !cpuRequest || !memoryRequest) {
+      showAlert("warning", "Incomplete Form", "Please fill out all required fields (Job Name, Source, CPU, Memory).");
+      return;
+    }
+
+    if (!masterNodeConnected) {
+      showAlert("error", "Master Node Not Found", "Unable to connect to the Slurm master node. Please ensure it is configured.");
       return;
     }
 
@@ -208,7 +213,7 @@ export default function JobsPage({ user }) {
       }
 
       try {
-        setIsLoading(true);
+        setIsSubmitting(true);
         showLoading("Uploading File...", "Please wait while the file is being uploaded");
 
         const formData = new FormData();
@@ -224,7 +229,6 @@ export default function JobsPage({ user }) {
         });
 
         downloadUrl = uploadResponse.data.download_url;
-
         if (!downloadUrl) {
           throw new Error("Failed to get download URL from server.");
         }
@@ -233,7 +237,7 @@ export default function JobsPage({ user }) {
       } catch (error) {
         Swal.close();
         showAlert("error", "File Upload Failed", error.response?.data?.message || error.message || "Failed to upload file.");
-        setIsLoading(false);
+        setIsSubmitting(false);
         return;
       }
     }
@@ -243,7 +247,7 @@ export default function JobsPage({ user }) {
       Job_name: jobName,
       github_url: downloadUrl, // Use download URL for both GitHub and file uploads
       user_name: username,
-      node_id: selectedNodeId,
+      node_id: selectedNodeId || null, // Optional - Slurm will handle scheduling if not specified
       cpu_request: parseInt(cpuRequest),
       gpu_request: parseInt(gpuRequest) || 0,
       memory_request: parseFloat(memoryRequest),
@@ -251,20 +255,14 @@ export default function JobsPage({ user }) {
     };
 
     try {
-      showLoading("Submitting Job...", "Please wait");
+      setIsSubmitting(true);
+      showLoading("Submitting Job...", "Please wait while Slurm schedules your job");
 
-      const nodeResponse = await axios.get(`${API_BASE_URL}/nodes/get-nodes-list`);
-      const selectedNode = nodeResponse.data.find(node => node.id === parseInt(selectedNodeId));
-
-      if (!selectedNode) {
-        throw new Error("Selected node not found");
-      }
-
-      const workerUrl = `http://${selectedNode.ip_address}:${MASTER_PORT}/submit-job`;
-      await axios.post(workerUrl, payload);
+      // Route through backend proxy to slurm-master
+      await axios.post(`${API_BASE_URL}/jobs/submit-job`, payload);
 
       Swal.close();
-      
+
       showAlert("success", "Job Submitted", `Job "${jobName}" submitted successfully!`, () => {
         fetchInitialData();
       });
@@ -285,28 +283,22 @@ export default function JobsPage({ user }) {
       Swal.close();
       showAlert("error", "Submission Failed", error.response?.data?.message || error.message || "Something went wrong.");
     } finally {
-      setIsLoading(false);
+      setIsSubmitting(false);
     }
   };
 
   const handleCancelJob = async (jobId) => {
-    if (!masterNodeIp) return;
-  
+    if (!masterNodeConnected) return;
+
     try {
       const confirmed = await showConfirm("Are you sure?", `Do you really want to cancel job '${jobId}'?`);
       if (!confirmed) return;
-  
+
       setIsLoading(true);
-  
-      const jobIpRes = await axios.get(`http://${masterNodeIp}:${MASTER_PORT}/job-ip/${jobId}`);
-      const nodeIp = jobIpRes.data?.nodes?.[0]?.ip;
-  
-      if (!nodeIp) {
-        throw new Error("Unable to determine job node IP.");
-      }
-  
-      const response = await axios.post(`http://${nodeIp}:${MASTER_PORT}/cancel-job`, { Job_id: jobId });
-  
+
+      // Use backend proxy to cancel job
+      const response = await axios.post(`${API_BASE_URL}/jobs/cancel-job`, { Job_id: jobId });
+
       showAlert("success", "Job Canceled", response.data.message, () => {
         fetchInitialData();
       });
@@ -316,7 +308,7 @@ export default function JobsPage({ user }) {
       setIsLoading(false);
     }
   };
-  
+
 
   const handleDownload = (downloadLink) => {
     if (downloadLink) {
@@ -459,19 +451,20 @@ export default function JobsPage({ user }) {
                 </div>
               )}
               <div className="input-group">
-                <label htmlFor="node-select">Select Node</label>
+                <label htmlFor="node-select">Select Node (Optional)</label>
                 <select
                   id="node-select"
                   value={selectedNodeId}
                   onChange={(e) => setSelectedNodeId(e.target.value)}
                 >
-                  <option value="">-- Select a Node --</option>
+                  <option value="">-- Auto (Slurm will schedule) --</option>
                   {nodes.map((node) => (
                     <option key={node.id} value={node.id}>
                       {node.name} (CPU: {node.cpu_count}, GPU: {node.gpu_count || 0}, Memory: {node.total_memory_gb} GB)
                     </option>
                   ))}
                 </select>
+                <p className="helper-text">Leave as Auto to let Slurm choose the best available node</p>
               </div>
               <div className="input-group">
                 <label htmlFor="resource-context">Resource Context</label>
@@ -549,9 +542,9 @@ export default function JobsPage({ user }) {
               <button
                 className="submit-btn"
                 onClick={handleSubmitJob}
-                disabled={isLoading}
+                disabled={isSubmitting}
               >
-                {isLoading ? "Submitting..." : "Submit Job"}
+                {isSubmitting ? "Submitting..." : "Submit Job"}
               </button>
             </div>
           </div>
@@ -742,6 +735,13 @@ export default function JobsPage({ user }) {
           color: #aaa;
         }
         
+        .helper-text {
+          font-size: 12px;
+          color: #6b7280;
+          margin: 4px 0 0 0;
+          font-style: italic;
+        }
+        
         .submit-btn {
           background-color: #1e3a8a;
           color: white;
@@ -928,3 +928,4 @@ export default function JobsPage({ user }) {
     </div>
   );
 }
+

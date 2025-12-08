@@ -3,6 +3,7 @@ import { API_BASE_URL } from "../config";
 
 export default function ResourceAllocation() {
   const [nodes, setNodes] = useState([]);
+  const [slurmNodes, setSlurmNodes] = useState([]); // Real-time Slurm node info
   const [users, setUsers] = useState([]);
   const [groups, setGroups] = useState([]);
   const [selectedEntity, setSelectedEntity] = useState(null);
@@ -19,6 +20,21 @@ export default function ResourceAllocation() {
   const [saveStatus, setSaveStatus] = useState({ message: "", type: "" });
 
   const calculateClusterTotals = () => {
+    // Use Slurm nodes if available, otherwise fall back to database nodes
+    if (slurmNodes.length > 0) {
+      return slurmNodes.reduce(
+        (totals, node) => ({
+          totalCPU: totals.totalCPU + (node.cpuTotal || 0),
+          totalGPU: totals.totalGPU + (node.gres ? parseInt(node.gres.match(/gpu:(\d+)/)?.[1] || 0) : 0),
+          totalMemory: totals.totalMemory + (node.realMemory ? node.realMemory / 1024 : 0), // Convert MB to GB
+          nodeCount: totals.nodeCount + 1,
+          allocCPU: totals.allocCPU + (node.cpuAlloc || 0),
+          allocMemory: totals.allocMemory + (node.allocMem ? node.allocMem / 1024 : 0),
+        }),
+        { totalCPU: 0, totalGPU: 0, totalMemory: 0, nodeCount: 0, allocCPU: 0, allocMemory: 0 }
+      );
+    }
+
     const workerNodes = nodes.filter((node) => node.node_type === "worker");
     return workerNodes.reduce(
       (totals, node) => ({
@@ -26,8 +42,10 @@ export default function ResourceAllocation() {
         totalGPU: totals.totalGPU + (node.gpu_count || 0),
         totalMemory: totals.totalMemory + (node.total_memory_gb || 0),
         nodeCount: totals.nodeCount + 1,
+        allocCPU: 0,
+        allocMemory: 0,
       }),
-      { totalCPU: 0, totalGPU: 0, totalMemory: 0, nodeCount: 0 }
+      { totalCPU: 0, totalGPU: 0, totalMemory: 0, nodeCount: 0, allocCPU: 0, allocMemory: 0 }
     );
   };
 
@@ -35,10 +53,11 @@ export default function ResourceAllocation() {
     const fetchData = async () => {
       setIsLoading(true);
       try {
-        const [nodesRes, usersRes, groupsRes] = await Promise.all([
+        const [nodesRes, usersRes, groupsRes, slurmNodesRes] = await Promise.all([
           fetch(`${API_BASE_URL}/nodes/get-nodes-list`),
           fetch(`${API_BASE_URL}/users/users`),
           fetch(`${API_BASE_URL}/users/groups`),
+          fetch(`${API_BASE_URL}/nodes/slurm-nodes`).catch(() => ({ ok: false })),
         ]);
 
         if (!nodesRes.ok || !usersRes.ok || !groupsRes.ok) {
@@ -50,6 +69,12 @@ export default function ResourceAllocation() {
           usersRes.json(),
           groupsRes.json(),
         ]);
+
+        // Fetch Slurm nodes if available
+        if (slurmNodesRes.ok) {
+          const slurmData = await slurmNodesRes.json();
+          setSlurmNodes(slurmData.nodes || []);
+        }
 
         setNodes(nodesData);
         setUsers(usersData);
@@ -278,15 +303,15 @@ export default function ResourceAllocation() {
               </option>
               {entityType === "user"
                 ? users.map((user) => (
-                    <option key={user.id} value={user.id}>
-                      {user.username}
-                    </option>
-                  ))
+                  <option key={user.id} value={user.id}>
+                    {user.username}
+                  </option>
+                ))
                 : groups.map((group) => (
-                    <option key={group.id} value={group.id}>
-                      {group.name}
-                    </option>
-                  ))}
+                  <option key={group.id} value={group.id}>
+                    {group.name}
+                  </option>
+                ))}
             </select>
           </div>
         </div>
@@ -714,3 +739,4 @@ margin-top:1px;
     </div>
   );
 }
+
