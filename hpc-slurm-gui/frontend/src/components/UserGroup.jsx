@@ -85,15 +85,25 @@ export default function UserGroup() {
         setError("");
         setSuccess("");
         
-        // Check password length
-        if (newUser.password.length < 6) {
+        // Check password length only if password is provided
+        if (newUser.password && newUser.password.length < 6) {
             setError("Password must be at least 6 characters long");
             return;
         }
         
         try {
-            await axios.post(`${API_BASE_URL}/auth/signup`, newUser);
-            setSuccess("User created successfully");
+            const response = await axios.post(`${API_BASE_URL}/auth/signup`, newUser);
+            
+            // Provide clear, user-friendly feedback based on the outcome
+            if (response.data.emailSent) {
+                const passwordInfo = newUser.password ? "" : " (auto-generated password)";
+                setSuccess(`✓ User "${newUser.username}" created successfully! Welcome email with credentials${passwordInfo} sent to ${newUser.email}`);
+            } else if (response.data.warning) {
+                setSuccess(`✓ User "${newUser.username}" created, but email delivery failed. Please provide credentials${passwordInfo} manually: ${newUser.email}`);
+            } else {
+                setSuccess(`✓ User "${newUser.username}" created successfully!` + (response.data.warning || ""));
+            }
+            
             setNewUser({ username: "", email: "", password: "" });
             fetchUsers();
         } catch (err) {
@@ -338,14 +348,13 @@ export default function UserGroup() {
                                     />
                                 </div>
                                 <div className="input-group">
-                                    <label htmlFor="password">Password</label>
+                                    <label htmlFor="password">Password {!editingUser && "(optional - auto-generated if empty)"}</label>
                                     <input
                                         type="password"
                                         id="password"
-                                        placeholder={editingUser ? "Enter new password (optional)" : "Enter password"}
+                                        placeholder={editingUser ? "Enter new password (optional)" : "Leave empty to auto-generate"}
                                         value={newUser.password}
                                         onChange={(e) => setNewUser({...newUser, password: e.target.value})}
-                                        required={!editingUser}
                                     />
                                 </div>
                                 <button type="submit" className="submit-btn">
