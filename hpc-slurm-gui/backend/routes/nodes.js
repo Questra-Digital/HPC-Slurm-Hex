@@ -1,7 +1,16 @@
 const express = require("express");
 const axios = require("axios");
 const { Node } = require("../config/db");
+const path = require('path');
+require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 const router = express.Router();
+const port = process.env.SLURM_PORT;
+
+// Helper function to get master node IP from database
+const getMasterNodeIp = async () => {
+    const masterNode = await Node.findOne({ where: { node_type: 'master' } });
+    return masterNode ? masterNode.ip_address : null;
+};
 
 router.post("/connect", async (req, res) => {
     const { name, ip, type } = req.body;
@@ -11,7 +20,25 @@ router.post("/connect", async (req, res) => {
     }
 
     try {
-        const response = await axios.get(`http://${ip}:5050/connect`, { timeout: 5000 });
+        let response;
+
+        if (type === "master") {
+            // Master node: connect directly
+            response = await axios.get(`http://${ip}:${port}/connect`, { timeout: 5000 });
+        } else {
+            // Worker node: route through master for security
+            const masterIp = await getMasterNodeIp();
+
+            if (!masterIp) {
+                return res.status(400).json({
+                    status: "Failed",
+                    message: "Master node must be connected first before adding workers"
+                });
+            }
+
+            // Connect to worker through master's proxy endpoint
+            response = await axios.get(`http://${masterIp}:${port}/worker-connect/${ip}`, { timeout: 10000 });
+        }
 
         if (response.status !== 200 || !response.data || response.data.status !== "active") {
             return res.status(500).json({ status: "Failed", message: "Node health check failed" });
@@ -45,7 +72,12 @@ router.post("/connect", async (req, res) => {
 
         return res.json({ status: created ? "Node created" : "Node updated", node });
     } catch (error) {
-        return res.status(500).json({ status: "Failed", message: "Could not connect to node", error: error.message });
+        console.error("NODE CONNECT ERROR:", error);
+        return res.status(500).json({
+            status: "Failed",
+            message: error.response?.data?.message || "Could not connect to node",
+            error: error.message
+        });
     }
 });
 
@@ -63,4 +95,28 @@ router.get("/get-nodes-list", async (req, res) => {
     res.json(nodes);
 });
 
+// Get real-time Slurm node info from master
+router.get("/slurm-nodes", async (req, res) => {
+    try {
+        const masterIp = await getMasterNodeIp();
+
+        if (!masterIp) {
+            return res.status(400).json({
+                error: "Master node not configured",
+                nodes: []
+            });
+        }
+
+        const response = await axios.get(`http://${masterIp}:${port}/nodes`, { timeout: 10000 });
+        res.json(response.data);
+    } catch (error) {
+        console.error("Failed to fetch Slurm nodes:", error.message);
+        res.status(500).json({
+            error: "Failed to fetch Slurm node information",
+            nodes: []
+        });
+    }
+});
+
 module.exports = router;
+

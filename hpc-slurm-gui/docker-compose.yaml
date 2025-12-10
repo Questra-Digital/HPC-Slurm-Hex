@@ -7,14 +7,16 @@ services:
       - "5051:80"
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       - frontend
-      - backend
     networks:
       - slurm-hpc-network
 
   frontend:
-    image: adeelumar17/hpc-slurm-frontend:v1.1.1
+    build: ./frontend
+    image: adeelumar17/hpc-slurm-frontend:latest
     container_name: hpc-slurm-frontend
     expose:
       - "5051"
@@ -23,16 +25,15 @@ services:
     restart: always
 
   backend:
-    image: adeelumar17/hpc-slurm-backend:v1.1.1
+    build: ./backend
+    image: adeelumar17/hpc-slurm-backend:latest
     container_name: hpc-slurm-backend
-    expose:
-      - "5052"
+    network_mode: host
     env_file:
       - ./backend/.env
-    networks:
-      - slurm-hpc-network
     restart: always
 
 networks:
   slurm-hpc-network:
     driver: bridge
+
