@@ -4,6 +4,8 @@ const jwt = require("jsonwebtoken");
 const { User } = require("../config/db");
 const { Op } = require("sequelize");
 const crypto = require("crypto"); 
+const { generateSecurePassword } = require("../utils/passwordGenerator");
+const emailService = require("../services/emailService");
 const router = express.Router();
 
 
@@ -87,12 +89,94 @@ router.post("/login", async (req, res) => {
 
 router.post("/signup", async (req, res) => {
     try {
-        const { username, email, password } = req.body;
-        const hashedPassword = await bcrypt.hash(password, 10);
-        await User.create({ username, email, password_hash: hashedPassword, role: "user" });
-        res.json({ message: "User created successfully" });
+        const { username, email, password, role = "user" } = req.body;
+
+        // Validate required fields
+        if (!username || !email) {
+            return res.status(400).json({ 
+                message: "Username and email are required" 
+            });
+        }
+
+        // Validate email format
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+            return res.status(400).json({ 
+                message: "Invalid email format" 
+            });
+        }
+
+        // Check if user already exists
+        const existingUser = await User.findOne({
+            where: {
+                [Op.or]: [{ email }, { username }]
+            }
+        });
+
+        if (existingUser) {
+            return res.status(400).json({ 
+                message: existingUser.email === email 
+                    ? "Email already exists" 
+                    : "Username already exists" 
+            });
+        }
+
+        // Generate password if not provided (admin creating user)
+        const plainPassword = (password && password.trim() !== "") ? password : generateSecurePassword(12);
+
+        // Validate password meets requirements
+        const passwordRegex = /^(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{6,}$/;
+        if (!passwordRegex.test(plainPassword)) {
+            return res.status(400).json({
+                message: "Password must be at least 6 characters, include 1 uppercase, 1 number, and 1 special character."
+            });
+        }
+
+        // Hash password
+        const hashedPassword = await bcrypt.hash(plainPassword, 10);
+
+        // Create user in database
+        const newUser = await User.create({ 
+            username, 
+            email, 
+            password_hash: hashedPassword, 
+            role 
+        });
+
+        console.log(`✅ User created: ${username} (${email}) - Role: ${role}`);
+
+        // Send welcome email to the newly created user (with either auto-generated or custom password)
+        const emailResult = await emailService.sendWelcomeEmail(
+            email, 
+            username, 
+            plainPassword, 
+            role
+        );
+
+        // Prepare response
+        const response = {
+            message: "User created successfully",
+            userId: newUser.id,
+            username: newUser.username,
+            email: newUser.email,
+            role: newUser.role,
+            emailSent: emailResult.success
+        };
+
+        // Add warning if email failed
+        if (!emailResult.success) {
+            response.warning = "User created, but email notification failed. Please provide credentials manually.";
+            response.emailError = emailResult.message;
+            console.warn(`⚠️  Email failed for ${email}: ${emailResult.message}`);
+        }
+
+        res.status(201).json(response);
     } catch (error) {
-        res.status(500).json({ message: "Error signing up", error });
+        console.error("❌ Error creating user:", error);
+        res.status(500).json({ 
+            message: "Error signing up", 
+            error: error.message 
+        });
     }
 });
 
