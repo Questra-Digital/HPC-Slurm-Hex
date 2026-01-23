@@ -19,10 +19,10 @@ const getMasterNodeIp = async () => {
 
 // FTP credentials (same as in your Python script)
 const FTP_CONFIG = {
-  host: "192.168.90.10",
-  user: "f228755",
-  password: "au2255",
-  port: 21, // FTP default port
+  host: process.env.FTP_CONFIG_HOST,
+  user: process.env.FTP_CONFIG_USER,
+  password: process.env.FTP_CONFIG_PASSWORD,
+  port: process.env.FTP_CONFIG_PORT, // FTP default port
   secure: false, // No encryption (standard FTP)
 };
 

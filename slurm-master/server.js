@@ -16,8 +16,8 @@ const REDIS_HOST = 'localhost';
 const REDIS_PORT = 6379;
 
 // FTP credentials for downloading uploaded files
-const FTP_USER = process.env.FTP_USER || "f228755";
-const FTP_PASSWORD = process.env.FTP_PASSWORD || "au2255";
+const FTP_USER = process.env.FTP_USER ;
+const FTP_PASSWORD = process.env.FTP_PASSWORD ;
 // Webserver URL for generating download links (public URL that proxies to worker nodes)
 const WEBSERVER_URL = process.env.WEBSERVER_URL || null;
 

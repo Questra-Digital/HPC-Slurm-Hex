@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
+from dotenv import load_dotenv
 import os
 import subprocess
 import shutil
@@ -7,12 +8,16 @@ from apscheduler.schedulers.background import BackgroundScheduler
 import requests
 import uuid
 
+load_dotenv()
+
 app = Flask(__name__)
 CORS(app) 
 
 # Declare global variables for FTP credentials
-FTP_USER = "f228755"
-FTP_PASSWORD = "au2255"
+
+# FTP_USER = "f228755"
+FTP_USER = os.getenv("FTP_USER")
+FTP_PASSWORD = os.getenv("FTP_PASSWORD")
 
 HOME_DIR = os.path.expanduser("~")
 JOBS_DIR = os.path.join(HOME_DIR, "jobs")
