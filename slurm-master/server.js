@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const axios = require('axios');  // Added for notebook proxy endpoints
 const { exec, execSync, spawn } = require('child_process');
 const os = require('os');
 const redis = require('redis');
