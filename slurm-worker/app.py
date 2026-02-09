@@ -233,7 +233,7 @@ def start_notebook():
             notebook_dir = os.path.join(HOME_DIR, "notebooks", "shared")
         os.makedirs(notebook_dir, exist_ok=True)
         
-        # Start Jupyter notebook in background
+        # Start Jupyter notebook in background with iframe-compatible settings
         cmd = [
             'jupyter', 'notebook',
             '--no-browser',
@@ -242,6 +242,8 @@ def start_notebook():
             f'--NotebookApp.token={token}',
             '--NotebookApp.allow_origin=*',
             '--NotebookApp.disable_check_xsrf=True',
+            '--NotebookApp.tornado_settings={"headers": {"Content-Security-Policy": "frame-ancestors * self"}}',
+            '--NotebookApp.allow_remote_access=True',
             f'--notebook-dir={notebook_dir}'
         ]
         

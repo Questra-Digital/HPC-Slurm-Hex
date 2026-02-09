@@ -717,15 +717,20 @@ app.all('/notebook/proxy/:workerIp/:port/*', async (req, res) => {
         host: `${workerIp}:${port}`
       },
       responseType: 'stream',
-      timeout: 60000
+      timeout: 60000,
+      maxRedirects: 5
     });
 
     res.status(response.status);
+
+    // Copy headers but remove iframe-blocking ones
+    const blockedHeaders = ['x-frame-options', 'content-security-policy', 'transfer-encoding'];
     Object.entries(response.headers).forEach(([key, value]) => {
-      if (key.toLowerCase() !== 'transfer-encoding') {
+      if (!blockedHeaders.includes(key.toLowerCase())) {
         res.setHeader(key, value);
       }
     });
+
     response.data.pipe(res);
   } catch (error) {
     console.error('Notebook proxy error:', error.message);
