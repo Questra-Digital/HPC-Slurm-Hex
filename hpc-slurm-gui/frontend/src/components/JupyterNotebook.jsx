@@ -89,7 +89,7 @@ const chartStyles = {
 };
 
 const JupyterNotebook = () => {
-    const [userId] = useState(sessionStorage.getItem("userId"));
+    const [userId] = useState(sessionStorage.getItem("id"));  // Fixed: 'id' not 'userId'
     const [userRole] = useState(sessionStorage.getItem("user_role"));
     const [hasPermission, setHasPermission] = useState(false);
     const [allowedWorkers, setAllowedWorkers] = useState([]);
