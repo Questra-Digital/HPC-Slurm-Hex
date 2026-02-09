@@ -207,10 +207,11 @@ NOTEBOOK_PROCESSES = {}
 
 @app.route('/notebook/start', methods=['POST'])
 def start_notebook():
-    """Start a Jupyter notebook server on specified port."""
+    """Start a Jupyter notebook server on specified port with per-user directory."""
     data = request.json
     port = data.get('port', 8888)
     token = data.get('token')
+    username = data.get('username')  # For per-user directories
     
     if not token:
         return jsonify({"error": "Token required"}), 400
@@ -225,8 +226,11 @@ def start_notebook():
             del NOTEBOOK_PROCESSES[port]
     
     try:
-        # Create a working directory for notebooks
-        notebook_dir = os.path.join(HOME_DIR, "notebooks")
+        # Create per-user directory if username provided, else use shared directory
+        if username:
+            notebook_dir = os.path.join(HOME_DIR, "notebooks", username)
+        else:
+            notebook_dir = os.path.join(HOME_DIR, "notebooks", "shared")
         os.makedirs(notebook_dir, exist_ok=True)
         
         # Start Jupyter notebook in background
@@ -253,12 +257,13 @@ def start_notebook():
             )
         
         NOTEBOOK_PROCESSES[port] = proc.pid
-        print(f"Started Jupyter notebook on port {port} with PID {proc.pid}")
+        print(f"Started Jupyter notebook on port {port} with PID {proc.pid} for user '{username or 'shared'}'")
         
         return jsonify({
             "message": "Notebook started",
             "pid": proc.pid,
-            "port": port
+            "port": port,
+            "notebook_dir": notebook_dir
         }), 200
         
     except FileNotFoundError:

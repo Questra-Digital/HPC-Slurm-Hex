@@ -90,6 +90,13 @@ router.post("/start", async (req, res) => {
             return res.status(400).json({ error: "userId and workerIp are required" });
         }
 
+        // Get user info including username
+        const user = await User.findByPk(userId);
+        if (!user) {
+            return res.status(404).json({ error: "User not found" });
+        }
+        const username = user.username;
+
         // Check permission
         const permission = await checkNotebookPermission(userId);
         if (!permission.allowed) {
@@ -141,7 +148,7 @@ router.post("/start", async (req, res) => {
             status: 'starting'
         });
 
-        // Start notebook via master proxy
+        // Start notebook via master proxy - include username for per-user directories
         const masterIp = await getMasterNodeIp();
         if (!masterIp) {
             await session.update({ status: 'error' });
@@ -151,7 +158,7 @@ router.post("/start", async (req, res) => {
         try {
             const response = await axios.post(
                 `http://${masterIp}:${SLURM_PORT}/notebook/start`,
-                { workerIp, port, token },
+                { workerIp, port, token, username },  // Added username
                 { timeout: 30000 }
             );
 
@@ -160,7 +167,7 @@ router.post("/start", async (req, res) => {
                 pid: response.data.pid
             });
 
-            console.log(`Notebook started for user ${userId} on ${workerIp}:${port}`);
+            console.log(`Notebook started for user ${username} (${userId}) on ${workerIp}:${port}`);
 
             res.json({
                 message: "Notebook started",

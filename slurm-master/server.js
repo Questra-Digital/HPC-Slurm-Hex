@@ -632,7 +632,7 @@ app.post('/submit-job', async (req, res) => {
 
 // Start notebook on worker
 app.post('/notebook/start', async (req, res) => {
-  const { workerIp, port, token } = req.body;
+  const { workerIp, port, token, username } = req.body;
 
   if (!workerIp || !port || !token) {
     return res.status(400).json({ error: "workerIp, port, and token are required" });
@@ -641,10 +641,10 @@ app.post('/notebook/start', async (req, res) => {
   try {
     const response = await axios.post(
       `http://${workerIp}:5053/notebook/start`,
-      { port, token },
+      { port, token, username },  // Forward username for per-user directories
       { timeout: 30000 }
     );
-    console.log(`Notebook started on ${workerIp}:${port}`);
+    console.log(`Notebook started on ${workerIp}:${port} for user ${username || 'unknown'}`);
     res.json(response.data);
   } catch (error) {
     console.error('Failed to start notebook:', error.message);
