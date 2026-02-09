@@ -7,6 +7,7 @@ import RemoteNodes from "./RemoteNodes";
 import UserGroup from "./UserGroup";
 import ResourceAllocation from "./ResourceAllocation";
 import Settings from "./Settings";
+import JupyterNotebook from "./JupyterNotebook";
 
 export default function Home({ user }) {
     const [activeMenuItem, setActiveMenuItem] = useState("dashboard");
@@ -25,6 +26,8 @@ export default function Home({ user }) {
                 return <ResourceAllocation />;
             case "settings":
                 return <Settings />;
+            case "notebooks":
+                return <JupyterNotebook />;
             default:
                 return <Dashboard setActiveMenuItem={setActiveMenuItem} />;
         }
@@ -32,12 +35,12 @@ export default function Home({ user }) {
 
     return (
         <div className="dashboard-container">
-            <Sidebar 
-                user={user} 
-                activeMenuItem={activeMenuItem} 
-                setActiveMenuItem={setActiveMenuItem} 
+            <Sidebar
+                user={user}
+                activeMenuItem={activeMenuItem}
+                setActiveMenuItem={setActiveMenuItem}
             />
-            
+
             <div className="main-content">
                 <div className="content-body">
                     {getContent()}

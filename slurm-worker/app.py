@@ -195,6 +195,164 @@ def health_check():
     except Exception as e:
         return jsonify({"status": "inactive", "message": "System check failed", "error": str(e)}), 500
 
+# ==========================================
+# Jupyter Notebook Management Endpoints
+# ==========================================
+
+import psutil
+import signal
+
+# Track running notebook processes: {port: pid}
+NOTEBOOK_PROCESSES = {}
+
+@app.route('/notebook/start', methods=['POST'])
+def start_notebook():
+    """Start a Jupyter notebook server on specified port."""
+    data = request.json
+    port = data.get('port', 8888)
+    token = data.get('token')
+    
+    if not token:
+        return jsonify({"error": "Token required"}), 400
+    
+    if port in NOTEBOOK_PROCESSES:
+        # Check if process is still running
+        try:
+            os.kill(NOTEBOOK_PROCESSES[port], 0)
+            return jsonify({"error": "Port already in use", "pid": NOTEBOOK_PROCESSES[port]}), 400
+        except OSError:
+            # Process no longer exists, clean up
+            del NOTEBOOK_PROCESSES[port]
+    
+    try:
+        # Create a working directory for notebooks
+        notebook_dir = os.path.join(HOME_DIR, "notebooks")
+        os.makedirs(notebook_dir, exist_ok=True)
+        
+        # Start Jupyter notebook in background
+        cmd = [
+            'jupyter', 'notebook',
+            '--no-browser',
+            f'--port={port}',
+            '--ip=0.0.0.0',
+            f'--NotebookApp.token={token}',
+            '--NotebookApp.allow_origin=*',
+            '--NotebookApp.disable_check_xsrf=True',
+            f'--notebook-dir={notebook_dir}'
+        ]
+        
+        # Open log files for stdout/stderr
+        log_file = os.path.join(notebook_dir, f'jupyter_{port}.log')
+        with open(log_file, 'w') as log:
+            proc = subprocess.Popen(
+                cmd,
+                stdout=log,
+                stderr=subprocess.STDOUT,
+                start_new_session=True,
+                cwd=notebook_dir
+            )
+        
+        NOTEBOOK_PROCESSES[port] = proc.pid
+        print(f"Started Jupyter notebook on port {port} with PID {proc.pid}")
+        
+        return jsonify({
+            "message": "Notebook started",
+            "pid": proc.pid,
+            "port": port
+        }), 200
+        
+    except FileNotFoundError:
+        return jsonify({"error": "Jupyter not installed. Run: pip install jupyter"}), 500
+    except Exception as e:
+        print(f"Failed to start notebook: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/notebook/stop', methods=['POST'])
+def stop_notebook():
+    """Stop a Jupyter notebook server."""
+    data = request.json
+    port = data.get('port')
+    pid = data.get('pid')
+    
+    try:
+        # Try to kill by PID first
+        if pid:
+            try:
+                os.kill(int(pid), signal.SIGTERM)
+                print(f"Stopped notebook with PID {pid}")
+            except ProcessLookupError:
+                pass  # Process already gone
+            except Exception as e:
+                print(f"Error killing PID {pid}: {e}")
+        
+        # Clean up from tracking dict
+        if port and port in NOTEBOOK_PROCESSES:
+            del NOTEBOOK_PROCESSES[port]
+        
+        return jsonify({"message": "Notebook stopped"}), 200
+        
+    except Exception as e:
+        print(f"Error stopping notebook: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/notebook/resources', methods=['GET'])
+def get_resources():
+    """Get current CPU, memory, and GPU usage for real-time monitoring graphs."""
+    try:
+        # CPU usage (percentage, non-blocking sample)
+        cpu_percent = psutil.cpu_percent(interval=0.5)
+        
+        # Memory usage
+        memory = psutil.virtual_memory()
+        memory_used = round(memory.used / (1024**3), 2)  # GB
+        memory_total = round(memory.total / (1024**3), 2)  # GB
+        memory_percent = memory.percent
+        
+        result = {
+            "cpu": {
+                "percent": cpu_percent,
+                "cores": psutil.cpu_count()
+            },
+            "memory": {
+                "used_gb": memory_used,
+                "total_gb": memory_total,
+                "percent": memory_percent
+            },
+            "gpu": None
+        }
+        
+        # GPU usage (if NVIDIA GPU available)
+        try:
+            gpu_output = subprocess.check_output([
+                'nvidia-smi',
+                '--query-gpu=utilization.gpu,memory.used,memory.total,name',
+                '--format=csv,noheader,nounits'
+            ], stderr=subprocess.DEVNULL).decode().strip()
+            
+            if gpu_output:
+                parts = gpu_output.split(',')
+                result["gpu"] = {
+                    "percent": float(parts[0].strip()),
+                    "memory_used_mb": float(parts[1].strip()),
+                    "memory_total_mb": float(parts[2].strip()),
+                    "name": parts[3].strip() if len(parts) > 3 else "Unknown GPU"
+                }
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            # No GPU or nvidia-smi not available - gpu stays None
+            pass
+        except Exception as gpu_error:
+            print(f"GPU monitoring error: {gpu_error}")
+        
+        return jsonify(result), 200
+        
+    except Exception as e:
+        print(f"Resource monitoring error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5053)
+
 

@@ -6,6 +6,7 @@ import Home from "./components/Home";
 import AdminSetup from "./components/AdminSetup";
 import RemoteNodes from "./components/RemoteNodes";
 import JobsPage from "./components/JobsPage";
+import JupyterNotebook from "./components/JupyterNotebook";
 import { API_BASE_URL } from "./config";
 
 
@@ -39,6 +40,7 @@ function App() {
                         <Route path="/login" element={<Login setUser={setUser} />} />
                         <Route path="/remote-nodes" element={user ? <RemoteNodes /> : <Navigate to="/login" />} />
                         <Route path="/job-page" element={user ? <JobsPage /> : <Navigate to="/login" />} />
+                        <Route path="/notebooks" element={user ? <JupyterNotebook /> : <Navigate to="/login" />} />
                     </>
                 ) : (
                     <Route path="*" element={<AdminSetup />} />

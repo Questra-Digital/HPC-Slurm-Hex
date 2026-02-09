@@ -936,3 +936,84 @@
       loop:
         - munge
         - slurmd
+
+# =========================================
+# Jupyter Notebook Installation
+# =========================================
+- name: Install Jupyter Notebook on Master and Workers
+  hosts: localhost,workers
+  become: true
+  vars_files:
+    - input.yml
+  tasks:
+    - name: Install Python3 pip and development tools
+      ansible.builtin.dnf:
+        name:
+          - python3-pip
+          - python3-devel
+          - gcc
+        state: present
+
+    - name: Upgrade pip to latest version
+      ansible.builtin.pip:
+        name: pip
+        executable: pip3
+        state: latest
+
+    - name: Install Jupyter packages via pip
+      ansible.builtin.pip:
+        name:
+          - jupyter
+          - jupyterlab
+          - notebook
+          - ipykernel
+          - psutil
+        executable: pip3
+        state: present
+
+    - name: Install gputil for GPU monitoring (optional, ignore errors)
+      ansible.builtin.pip:
+        name: gputil
+        executable: pip3
+        state: present
+      ignore_errors: yes
+
+    - name: Create Jupyter config directory
+      ansible.builtin.file:
+        path: /etc/jupyter
+        state: directory
+        mode: '0755'
+
+    - name: Deploy Jupyter server configuration
+      ansible.builtin.copy:
+        content: |
+          # Jupyter Server Configuration for HPC-Slurm-Hex
+          c.ServerApp.ip = '0.0.0.0'
+          c.ServerApp.open_browser = False
+          c.ServerApp.allow_remote_access = True
+          c.ServerApp.allow_origin = '*'
+          c.ServerApp.disable_check_xsrf = True
+          c.NotebookApp.ip = '0.0.0.0'
+          c.NotebookApp.open_browser = False
+          c.NotebookApp.allow_remote_access = True
+          c.NotebookApp.allow_origin = '*'
+          c.NotebookApp.disable_check_xsrf = True
+        dest: /etc/jupyter/jupyter_server_config.py
+        mode: '0644'
+
+    - name: Create symlink for user jupyter config
+      ansible.builtin.file:
+        src: /etc/jupyter/jupyter_server_config.py
+        dest: /root/.jupyter/jupyter_server_config.py
+        state: link
+        force: yes
+      ignore_errors: yes
+
+    - name: Verify Jupyter installation
+      ansible.builtin.command: jupyter --version
+      register: jupyter_version
+      changed_when: false
+
+    - name: Display Jupyter version
+      ansible.builtin.debug:
+        msg: "Jupyter installed: {{ jupyter_version.stdout }}"

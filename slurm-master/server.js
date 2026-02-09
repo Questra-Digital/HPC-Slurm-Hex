@@ -152,7 +152,7 @@ const fetchAndCacheJobs = async () => {
       const runningJobs = jobs.filter(job => job.state === 'RUNNING');
       await Promise.all(runningJobs.map(job => {
 
-      // Skip jobs with a dot in the job ID (like 24.batch) - these are sub-jobs
+        // Skip jobs with a dot in the job ID (like 24.batch) - these are sub-jobs
         if (job.jobId.includes('.')) return Promise.resolve();
         return new Promise((resolve) => {
           fetchJobComment(job.jobId, (err, comment) => {
@@ -415,8 +415,8 @@ app.post('/submit-job', async (req, res) => {
     const jobFolder = path.join(JOBS_DIR, job_id);
 
     // Remove existing job folder if present
-   // if (fs.existsSync(jobFolder)) {
-     // fs.rmSync(jobFolder, { recursive: true, force: true });
+    // if (fs.existsSync(jobFolder)) {
+    // fs.rmSync(jobFolder, { recursive: true, force: true });
     //}
 
     // Download and extract files with timeouts to prevent hanging
@@ -458,7 +458,7 @@ app.post('/submit-job', async (req, res) => {
           stdio: 'pipe',
           timeout: 60000 // 1 minute timeout
         });
-      // Convert DOS line endings to Unix for all shell scripts (fixes Windows uploads)
+        // Convert DOS line endings to Unix for all shell scripts (fixes Windows uploads)
         console.log('Converting line endings for shell scripts...');
         try {
           execSync(`find "${jobFolder}" -name "*.sh" -exec sed -i 's/\\r$//' {} \\;`, {
@@ -490,7 +490,7 @@ app.post('/submit-job', async (req, res) => {
           stdio: 'pipe',
           timeout: 120000 // 2 minute timeout
         });
-      // Convert DOS line endings to Unix for all shell scripts (fixes Windows uploads)
+        // Convert DOS line endings to Unix for all shell scripts (fixes Windows uploads)
         console.log('Converting line endings for shell scripts...');
         try {
           execSync(`find "${jobFolder}" -name "*.sh" -exec sed -i 's/\\r$//' {} \\;`, {
@@ -512,8 +512,8 @@ app.post('/submit-job', async (req, res) => {
     }
 
     console.log('Submitting job via sbatch...');
-    
-   // Helper function to find shell script in a directory
+
+    // Helper function to find shell script in a directory
     const findShellScript = (dir) => {
       const priorityNames = ['run.sh', 'main.sh', 'job.sh', 'start.sh', 'submit.sh'];
       const files = fs.readdirSync(dir);
@@ -626,7 +626,114 @@ app.post('/submit-job', async (req, res) => {
   }
 });
 
+// =============================================
+// Notebook Proxy Endpoints
+// =============================================
+
+// Start notebook on worker
+app.post('/notebook/start', async (req, res) => {
+  const { workerIp, port, token } = req.body;
+
+  if (!workerIp || !port || !token) {
+    return res.status(400).json({ error: "workerIp, port, and token are required" });
+  }
+
+  try {
+    const response = await axios.post(
+      `http://${workerIp}:5053/notebook/start`,
+      { port, token },
+      { timeout: 30000 }
+    );
+    console.log(`Notebook started on ${workerIp}:${port}`);
+    res.json(response.data);
+  } catch (error) {
+    console.error('Failed to start notebook:', error.message);
+    res.status(error.response?.status || 500).json({
+      error: error.message,
+      details: error.response?.data
+    });
+  }
+});
+
+// Stop notebook on worker
+app.post('/notebook/stop', async (req, res) => {
+  const { workerIp, port, pid } = req.body;
+
+  if (!workerIp) {
+    return res.status(400).json({ error: "workerIp is required" });
+  }
+
+  try {
+    const response = await axios.post(
+      `http://${workerIp}:5053/notebook/stop`,
+      { port, pid },
+      { timeout: 10000 }
+    );
+    console.log(`Notebook stopped on ${workerIp}`);
+    res.json(response.data);
+  } catch (error) {
+    console.error('Failed to stop notebook:', error.message);
+    res.status(error.response?.status || 500).json({
+      error: error.message,
+      details: error.response?.data
+    });
+  }
+});
+
+// Get resource usage from worker (for real-time monitoring)
+app.get('/notebook/resources/:workerIp', async (req, res) => {
+  const { workerIp } = req.params;
+
+  try {
+    const response = await axios.get(
+      `http://${workerIp}:5053/notebook/resources`,
+      { timeout: 5000 }
+    );
+    res.json(response.data);
+  } catch (error) {
+    console.error('Failed to get resources from', workerIp, ':', error.message);
+    res.status(error.response?.status || 500).json({
+      error: error.message
+    });
+  }
+});
+
+// Proxy all notebook HTTP requests to worker
+app.all('/notebook/proxy/:workerIp/:port/*', async (req, res) => {
+  const { workerIp, port } = req.params;
+  const subPath = req.params[0] || '';
+
+  try {
+    const targetUrl = `http://${workerIp}:${port}/${subPath}`;
+
+    const response = await axios({
+      method: req.method,
+      url: targetUrl,
+      params: req.query,
+      data: req.body,
+      headers: {
+        ...req.headers,
+        host: `${workerIp}:${port}`
+      },
+      responseType: 'stream',
+      timeout: 60000
+    });
+
+    res.status(response.status);
+    Object.entries(response.headers).forEach(([key, value]) => {
+      if (key.toLowerCase() !== 'transfer-encoding') {
+        res.setHeader(key, value);
+      }
+    });
+    response.data.pipe(res);
+  } catch (error) {
+    console.error('Notebook proxy error:', error.message);
+    res.status(error.response?.status || 500).json({ error: error.message });
+  }
+});
+
 app.listen(port, '0.0.0.0', () => {
   console.log(`Slurm API server running at http://0.0.0.0:${port}`);
 });
+
 

@@ -1,14 +1,15 @@
 import { useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
-import { 
-  LayoutDashboard, 
-  Clock, 
-  Users, 
-  BarChart3, 
-  Globe, 
-  Settings, 
-  LogOut,
-  HardDrive
+import {
+    LayoutDashboard,
+    Clock,
+    Users,
+    BarChart3,
+    Globe,
+    Settings,
+    LogOut,
+    HardDrive,
+    BookOpen
 } from "lucide-react";
 import { API_BASE_URL } from "../config";
 
@@ -35,7 +36,7 @@ export default function Sidebar({ user, activeMenuItem, setActiveMenuItem }) {
             <div className="sidebar-header">
                 <h2>HPC-Slurm-HEX</h2>
             </div>
-            
+
             <div className="sidebar-user">
                 <div className="user-avatar">
                     {user.charAt(0).toUpperCase()}
@@ -45,7 +46,7 @@ export default function Sidebar({ user, activeMenuItem, setActiveMenuItem }) {
                     <span className="user-role">{userRole}</span>
                 </div>
             </div>
-            
+
             <nav className="sidebar-nav">
                 <ul>
                     {/* NEW: Conditionally render based on permissions */}
@@ -66,7 +67,7 @@ export default function Sidebar({ user, activeMenuItem, setActiveMenuItem }) {
                             </a>
                         </li>
                     )}
-                    
+
                     {permissions.includes("users") && (
                         <li className={activeMenuItem === "users" ? "active" : ""}>
                             <a href="#" onClick={() => setActiveMenuItem("users")}>
@@ -84,6 +85,14 @@ export default function Sidebar({ user, activeMenuItem, setActiveMenuItem }) {
                             </a>
                         </li>
                     )}
+
+                    {/* Notebooks - visible to all users (permission checked in component) */}
+                    <li className={activeMenuItem === "notebooks" ? "active" : ""}>
+                        <a href="#" onClick={() => setActiveMenuItem("notebooks")}>
+                            <BookOpen size={18} className="icon" />
+                            Notebooks
+                        </a>
+                    </li>
 
                     <li className="divider"></li>
 
@@ -106,7 +115,7 @@ export default function Sidebar({ user, activeMenuItem, setActiveMenuItem }) {
                     )}
                 </ul>
             </nav>
-            
+
             <div className="sidebar-footer">
                 <button onClick={handleLogout} className="logout-button">
                     <LogOut size={18} className="icon" />
