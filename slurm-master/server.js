@@ -706,6 +706,7 @@ app.all('/notebook/proxy/:workerIp/:port/*', async (req, res) => {
 
   try {
     const targetUrl = `http://${workerIp}:${port}/${subPath}`;
+    const proxyBasePath = `/notebook/proxy/${workerIp}/${port}`;
 
     const response = await axios({
       method: req.method,
@@ -718,15 +719,30 @@ app.all('/notebook/proxy/:workerIp/:port/*', async (req, res) => {
       },
       responseType: 'stream',
       timeout: 60000,
-      maxRedirects: 5
+      maxRedirects: 0,  // Don't follow redirects, handle them ourselves
+      validateStatus: (status) => status < 500  // Accept redirects
     });
 
     res.status(response.status);
 
-    // Copy headers but remove iframe-blocking ones
+    // Headers to remove for iframe compatibility
     const blockedHeaders = ['x-frame-options', 'content-security-policy', 'transfer-encoding'];
+
     Object.entries(response.headers).forEach(([key, value]) => {
-      if (!blockedHeaders.includes(key.toLowerCase())) {
+      const lowerKey = key.toLowerCase();
+      if (blockedHeaders.includes(lowerKey)) return;
+
+      // Rewrite redirect Location headers to go through proxy
+      if (lowerKey === 'location') {
+        let newLocation = value;
+        // If it's a relative redirect or absolute to the worker
+        if (value.startsWith('/')) {
+          newLocation = `${proxyBasePath}${value}`;
+        } else if (value.includes(`${workerIp}:${port}`)) {
+          newLocation = value.replace(`http://${workerIp}:${port}`, proxyBasePath);
+        }
+        res.setHeader(key, newLocation);
+      } else {
         res.setHeader(key, value);
       }
     });

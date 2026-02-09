@@ -251,6 +251,7 @@ router.all("/proxy/:workerIp/:port/*", async (req, res) => {
         const { workerIp, port } = req.params;
         const subPath = req.params[0] || '';
         const masterIp = await getMasterNodeIp();
+        const proxyBasePath = `/notebooks/proxy/${workerIp}/${port}`;
 
         if (!masterIp) {
             return res.status(500).json({ error: "Master node not configured" });
@@ -268,17 +269,34 @@ router.all("/proxy/:workerIp/:port/*", async (req, res) => {
                 host: `${workerIp}:${port}`
             },
             responseType: 'stream',
-            timeout: 60000
+            timeout: 60000,
+            maxRedirects: 0,  // Don't follow redirects
+            validateStatus: (status) => status < 500
         });
 
         res.status(response.status);
-        // Copy headers but remove iframe-blocking ones
+
+        // Headers to remove for iframe compatibility
         const blockedHeaders = ['x-frame-options', 'content-security-policy', 'transfer-encoding'];
+
         Object.entries(response.headers).forEach(([key, value]) => {
-            if (!blockedHeaders.includes(key.toLowerCase())) {
+            const lowerKey = key.toLowerCase();
+            if (blockedHeaders.includes(lowerKey)) return;
+
+            // Rewrite redirect Location headers to go through proxy
+            if (lowerKey === 'location') {
+                let newLocation = value;
+                if (value.startsWith('/')) {
+                    newLocation = `/api${proxyBasePath}${value}`;
+                } else if (value.includes(`notebook/proxy/${workerIp}/${port}`)) {
+                    newLocation = value.replace(`/notebook/proxy/${workerIp}/${port}`, `/api${proxyBasePath}`);
+                }
+                res.setHeader(key, newLocation);
+            } else {
                 res.setHeader(key, value);
             }
         });
+
         response.data.pipe(res);
     } catch (error) {
         console.error("Proxy error:", error.message);
