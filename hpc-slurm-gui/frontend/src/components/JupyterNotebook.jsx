@@ -126,7 +126,7 @@ const JupyterNotebook = () => {
                         worker_ip: session.worker_ip,
                         worker_port: session.worker_port,
                         token: session.token,
-                        url: `/api/notebooks/proxy/${session.worker_ip}/${session.worker_port}/?token=${session.token}`
+                        url: `/notebooks/proxy/${session.worker_ip}/${session.worker_port}/?token=${session.token}`
                     });
                 }
             } catch (error) {

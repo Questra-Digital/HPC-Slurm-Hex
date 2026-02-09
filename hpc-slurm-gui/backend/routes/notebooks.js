@@ -118,7 +118,7 @@ router.post("/start", async (req, res) => {
                     workerIp: existing.worker_ip,
                     port: existing.worker_port,
                     token: existing.token,
-                    url: `/api/notebooks/proxy/${existing.worker_ip}/${existing.worker_port}/?token=${existing.token}`
+                    url: `/notebooks/proxy/${existing.worker_ip}/${existing.worker_port}/?token=${existing.token}`
                 }
             });
         }
@@ -176,7 +176,7 @@ router.post("/start", async (req, res) => {
                     workerIp,
                     port,
                     token,
-                    url: `/api/notebooks/proxy/${workerIp}/${port}/?token=${token}`
+                    url: `/notebooks/proxy/${workerIp}/${port}/?token=${token}`
                 }
             });
         } catch (err) {
