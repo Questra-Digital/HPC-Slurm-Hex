@@ -1,8 +1,18 @@
+# Flask Worker Dependencies
 Flask
 Flask-Cors
 apscheduler
 requests
 werkzeug
+
+# Resource Monitoring
 psutil
+
+# Jupyter Notebook (for notebook feature)
+jupyter
+jupyterlab
+notebook
+ipykernel
+
 
 
