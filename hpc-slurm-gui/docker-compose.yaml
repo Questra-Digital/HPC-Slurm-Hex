@@ -33,6 +33,21 @@ services:
       - ./backend/.env
     restart: always
 
+  grafana:
+    image: grafana/grafana:latest
+    container_name: hpc-grafana
+    ports:
+      - "3000:3000"  # Access http://host:3000 for config (admin/admin)
+    volumes:
+      - ./grafana-data:/var/lib/grafana  # Persist
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=your_secure_pass  # Change
+    networks:
+      - slurm-hpc-network
+    depends_on:
+      - backend
+      
 networks:
   slurm-hpc-network:
     driver: bridge

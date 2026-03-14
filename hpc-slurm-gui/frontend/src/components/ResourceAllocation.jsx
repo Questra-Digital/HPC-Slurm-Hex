@@ -1,5 +1,19 @@
 import React, { useState, useEffect } from "react";
 import { API_BASE_URL } from "../config";
+import axios from "axios";  // ← ADD THIS LINE
+
+import { Line } from 'react-chartjs-2';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend
+} from 'chart.js';
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
 
 export default function ResourceAllocation() {
   const [nodes, setNodes] = useState([]);
@@ -49,46 +63,148 @@ export default function ResourceAllocation() {
     );
   };
 
+const [metricsData, setMetricsData] = useState({ cpu: [], memory: [], gpu: [] });  // Time-series
+
+useEffect(() => {
+  const fetchMetrics = async () => {
+    try {
+      const [cpuRes, memRes, gpuRes] = await Promise.all([
+        axios.get(`${API_BASE_URL}/resources/metrics?type=cpu&range=5m&step=15s`),
+        axios.get(`${API_BASE_URL}/resources/metrics?type=memory&range=5m&step=15s`),
+        axios.get(`${API_BASE_URL}/resources/metrics?type=gpu&range=5m&step=15s`)
+      ]);
+      setMetricsData({
+        cpu: processMetrics(cpuRes.data),  // Helper to format {labels: timestamps, datasets: [{data: values}]}
+        memory: processMetrics(memRes.data),
+        gpu: processMetrics(gpuRes.data)
+      });
+    } catch (error) {
+      console.error("Metrics fetch error:", error);
+    }
+  };
+  fetchMetrics();
+  const interval = setInterval(fetchMetrics, 15000);  // Real-time
+  return () => clearInterval(interval);
+}, []);
+
+
+// Temporary commented for debugging
+
+  // useEffect(() => {
+  //   const fetchData = async () => {
+  //     setIsLoading(true);
+  //     try {
+  //       const [nodesRes, usersRes, groupsRes, slurmNodesRes] = await Promise.all([
+  //         fetch(`${API_BASE_URL}/nodes/get-nodes-list`),
+  //         fetch(`${API_BASE_URL}/users/users`),
+  //         fetch(`${API_BASE_URL}/users/groups`),
+  //         fetch(`${API_BASE_URL}/nodes/slurm-nodes`).catch(() => ({ ok: false })),
+  //       ]);
+
+  //       if (!nodesRes.ok || !usersRes.ok || !groupsRes.ok) {
+  //         throw new Error("Failed to fetch data");
+  //       }
+
+  //       const [nodesData, usersData, groupsData] = await Promise.all([
+  //         nodesRes.json(),
+  //         usersRes.json(),
+  //         groupsRes.json(),
+  //       ]);
+
+  //       // Fetch Slurm nodes if available
+  //       if (slurmNodesRes.ok) {
+  //         const slurmData = await slurmNodesRes.json();
+  //         setSlurmNodes(slurmData.nodes || []);
+  //       }
+
+  //       setNodes(nodesData);
+  //       setUsers(usersData);
+  //       setGroups(groupsData);
+  //     } catch (error) {
+  //       console.error("Error fetching initial data:", error);
+  //       setSaveStatus({ message: "Failed to load data", type: "error" });
+  //     } finally {
+  //       setIsLoading(false);
+  //     }
+  //   };
+
+  //   fetchData();
+  // }, []);
+
+
   useEffect(() => {
-    const fetchData = async () => {
-      setIsLoading(true);
-      try {
-        const [nodesRes, usersRes, groupsRes, slurmNodesRes] = await Promise.all([
-          fetch(`${API_BASE_URL}/nodes/get-nodes-list`),
-          fetch(`${API_BASE_URL}/users/users`),
-          fetch(`${API_BASE_URL}/users/groups`),
-          fetch(`${API_BASE_URL}/nodes/slurm-nodes`).catch(() => ({ ok: false })),
-        ]);
+  const fetchData = async () => {
+    setIsLoading(true);
+    try {
+      const [nodesRes, usersRes, groupsRes] = await Promise.all([
+        fetch(`${API_BASE_URL}/nodes/get-nodes-list`),
+        fetch(`${API_BASE_URL}/users/users`),
+        fetch(`${API_BASE_URL}/users/groups`),
+      ]);
 
-        if (!nodesRes.ok || !usersRes.ok || !groupsRes.ok) {
-          throw new Error("Failed to fetch data");
-        }
-
-        const [nodesData, usersData, groupsData] = await Promise.all([
-          nodesRes.json(),
-          usersRes.json(),
-          groupsRes.json(),
-        ]);
-
-        // Fetch Slurm nodes if available
-        if (slurmNodesRes.ok) {
-          const slurmData = await slurmNodesRes.json();
-          setSlurmNodes(slurmData.nodes || []);
-        }
-
-        setNodes(nodesData);
-        setUsers(usersData);
-        setGroups(groupsData);
-      } catch (error) {
-        console.error("Error fetching initial data:", error);
-        setSaveStatus({ message: "Failed to load data", type: "error" });
-      } finally {
-        setIsLoading(false);
+      if (!nodesRes.ok || !usersRes.ok || !groupsRes.ok) {
+        throw new Error("Failed to fetch data");
       }
-    };
 
-    fetchData();
-  }, []);
+      const [nodesData, usersData, groupsData] = await Promise.all([
+        nodesRes.json(),
+        usersRes.json(),
+        groupsRes.json(),
+      ]);
+
+      // ────────────── TEMPORARY LOCAL MOCK FOR SLURM NODES ──────────────
+      // Comment out real fetch during local testing
+      // const slurmNodesRes = await fetch(`${API_BASE_URL}/nodes/slurm-nodes`);
+      // if (slurmNodesRes.ok) {
+      //   const slurmData = await slurmNodesRes.json();
+      //   setSlurmNodes(slurmData.nodes || []);
+      // }
+
+      // Fake data so cluster totals are non-zero and page renders
+      const mockSlurmNodes = [
+        { name: "master",   cpuTotal: 16, cpuAlloc: 4, realMemory: 32768, gres: "gpu:0" },
+        { name: "compute1", cpuTotal: 8,  cpuAlloc: 2, realMemory: 16384, gres: "gpu:0" },
+        { name: "compute2", cpuTotal: 8,  cpuAlloc: 0, realMemory: 16384, gres: "gpu:0" },
+      ];
+      setSlurmNodes(mockSlurmNodes);
+      // ────────────────────────────────────────────────────────────────
+
+      setNodes(nodesData);
+      setUsers(usersData);
+      setGroups(groupsData);
+    } catch (error) {
+      console.warn("Some data failed to load (normal in local mock mode):", error);
+      // Still show page even if some fetches fail
+      setNodes([]);
+      setUsers([]);
+      setGroups([]);
+      setSlurmNodes([]); // fallback
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  fetchData();
+}, []);
+
+// Helper
+// Helper to format Prometheus/mock data for Chart.js
+const processMetrics = (data) => {
+  if (!data || data.length === 0 || !data[0].values) {
+    return { labels: [], datasets: [{ data: [] }] };  // Empty fallback
+  }
+  const labels = data[0].values.map(([ts]) => new Date(ts * 1000).toLocaleTimeString());  // Timestamps to labels
+  const values = data[0].values.map(([, val]) => parseFloat(val));  // Values to numbers
+  return {
+    labels,
+    datasets: [{
+      label: 'Utilization %',
+      data: values,
+      borderColor: 'rgb(75, 192, 192)',
+      tension: 0.1
+    }]
+  };
+};
 
   const handleEntityChange = (event) => {
     setEntityType(event.target.value);
@@ -193,6 +309,12 @@ export default function ResourceAllocation() {
   };
 
   const clusterTotals = calculateClusterTotals();
+
+  console.log("metricsData shape:", {
+  cpu: metricsData.cpu,
+  memory: metricsData.memory,
+  gpu: metricsData.gpu
+});
 
   return (
     <div className="resource-allocation">
@@ -369,6 +491,7 @@ export default function ResourceAllocation() {
               </button>
             </div>
 
+
             {saveStatus.message && (
               <div className={`status-message ${saveStatus.type}`}>
                 {saveStatus.message}
@@ -376,6 +499,51 @@ export default function ResourceAllocation() {
             )}
           </>
         )}
+
+
+            <div className="metrics-section">
+  <h3>Real-Time Resource Utilization</h3>
+  <div className="graphs-grid">
+    {/* CPU */}
+    <div className="graph-card">
+      <h4>CPU Utilization</h4>
+      {metricsData.cpu?.labels?.length > 0 ? (
+        <Line
+          data={metricsData.cpu}
+          options={{ responsive: true, scales: { y: { beginAtZero: true, max: 100 } } }}
+        />
+      ) : (
+        <p style={{ color: '#666', textAlign: 'center' }}>Loading CPU data...</p>
+      )}
+    </div>
+
+    {/* Memory */}
+    <div className="graph-card">
+      <h4>Memory Utilization</h4>
+      {metricsData.memory?.labels?.length > 0 ? (
+        <Line
+          data={metricsData.memory}
+          options={{ responsive: true, scales: { y: { beginAtZero: true, max: 100 } } }}
+        />
+      ) : (
+        <p style={{ color: '#666', textAlign: 'center' }}>Loading Memory data...</p>
+      )}
+    </div>
+
+    {/* GPU */}
+    <div className="graph-card">
+      <h4>GPU Utilization</h4>
+      {metricsData.gpu?.labels?.length > 0 ? (
+        <Line
+          data={metricsData.gpu}
+          options={{ responsive: true, scales: { y: { beginAtZero: true, max: 100 } } }}
+        />
+      ) : (
+        <p style={{ color: '#666', textAlign: 'center' }}>Loading GPU data...</p>
+      )}
+    </div>
+  </div>
+</div>
       </div>
       <style>{`
                 /* ResourceAllocation.css */
@@ -386,6 +554,43 @@ export default function ResourceAllocation() {
     height:90vh;
   }
 
+  /* Abrar's addition */
+
+  .metrics-section {
+  margin-top: 30px;
+  padding: 20px;
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  border: 1px solid #e1e8ed;
+}
+
+.metrics-section h3 {
+  margin-top: 0;
+  color: #1a5276;
+}
+
+.graphs-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 20px;
+  margin-top: 15px;
+}
+
+.graph-card {
+  background: #f8f9fa;
+  padding: 15px;
+  border-radius: 6px;
+  border: 1px solid #e1e8ed;
+}
+
+.graph-card h4 {
+  margin: 0 0 10px 0;
+  font-size: 16px;
+  color: #34495e;
+}  
+
+/* End of Abrar's addition */
   
   .resource-allocation h2 {
     color: #1e3a8a;
