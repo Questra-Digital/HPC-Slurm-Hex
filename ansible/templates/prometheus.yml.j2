@@ -1,0 +1,12 @@
+global:
+  scrape_interval: {{ prometheus_scrape_interval }}s
+scrape_configs:
+  - job_name: 'node'
+    static_configs:
+      - targets: ['localhost:{{ node_exporter_port }}'{% for ip in c_ip %}, '{{ ip }}:{{ node_exporter_port }}'{% endfor %}]
+  - job_name: 'slurm'
+    static_configs:
+      - targets: ['localhost:{{ slurm_exporter_port }}']
+  - job_name: 'dcgm'  # NVIDIA GPUs
+    static_configs:
+      - targets: ['localhost:{{ dcgm_exporter_port }}'{% if enable_nvidia_gpu_driver | int == 1 %}{% for ip in c_ip %}, '{{ ip }}:{{ dcgm_exporter_port }}'{% endfor %}{% endif %}]

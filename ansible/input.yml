@@ -100,3 +100,11 @@ slurm_node_config: "compute[1-2] Sockets=8 CoresPerSocket=1 ThreadsPerCore=1 Rea
 #   - 192.168.1.2                       # (commented out: InfiniBand disabled, only 2 nodes)
 #   - 192.168.1.3                       # (commented out: InfiniBand disabled, only 2 nodes)
 #   - 192.168.1.4                       # (commented out: InfiniBand disabled, only 2 nodes)
+
+# Monitoring Flags
+enable_monitoring: 1                    # Toggle Prometheus/Grafana
+prometheus_scrape_interval: 15          # Seconds for real-time
+node_exporter_port: 9100
+slurm_exporter_port: 6817               # SLURM standard
+dcgm_exporter_port: 9400                # NVIDIA GPU if enabled
+prometheus_port: 9090

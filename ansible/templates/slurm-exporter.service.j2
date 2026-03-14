@@ -1,0 +1,8 @@
+[Unit]
+Description=SLURM Prometheus Exporter
+After=network.target
+[Service]
+ExecStart=/usr/local/bin/slurm-exporter -web.listen-address=:{{ slurm_exporter_port }}
+Restart=always
+[Install]
+WantedBy=multi-user.target
