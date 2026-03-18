@@ -32,7 +32,8 @@ export default function ResourceAllocation() {
   });
   const [isLoading, setIsLoading] = useState(true);
   const [saveStatus, setSaveStatus] = useState({ message: "", type: "" });
-
+  const [selectedNodeIp, setSelectedNodeIp] = useState("");
+  
   const calculateClusterTotals = () => {
     // Use Slurm nodes if available, otherwise fall back to database nodes
     if (slurmNodes.length > 0) {
@@ -69,9 +70,9 @@ useEffect(() => {
   const fetchMetrics = async () => {
     try {
       const [cpuRes, memRes, gpuRes] = await Promise.all([
-        axios.get(`${API_BASE_URL}/resources/metrics?type=cpu&range=5m&step=15s`),
-        axios.get(`${API_BASE_URL}/resources/metrics?type=memory&range=5m&step=15s`),
-        axios.get(`${API_BASE_URL}/resources/metrics?type=gpu&range=5m&step=15s`)
+        axios.get(`${API_BASE_URL}/resources/metrics?type=cpu&range=5m&step=15s${selectedNodeIp ? `&nodeIp=${selectedNodeIp}` : ''}`),
+        axios.get(`${API_BASE_URL}/resources/metrics?type=memory&range=5m&step=15s${selectedNodeIp ? `&nodeIp=${selectedNodeIp}` : ''}`),
+        axios.get(`${API_BASE_URL}/resources/metrics?type=gpu&range=5m&step=15s${selectedNodeIp ? `&nodeIp=${selectedNodeIp}` : ''}`)
       ]);
       setMetricsData({
         cpu: processMetrics(cpuRes.data),  // Helper to format {labels: timestamps, datasets: [{data: values}]}
@@ -501,10 +502,30 @@ const processMetrics = (data) => {
         )}
 
 
-            <div className="metrics-section">
+
+<div className="metrics-section">
   <h3>Real-Time Resource Utilization</h3>
+  
+  {/* Per-node selector */}
+  <div className="input-group" style={{maxWidth: '300px', marginBottom: '15px'}}>
+    <label>Select Node (or Cluster-wide)</label>
+    <select 
+      value={selectedNodeIp || ''} 
+      onChange={(e) => setSelectedNodeIp(e.target.value)}
+    >
+      <option value="">All Nodes (Cluster-wide)</option>
+      {nodes
+        .filter(n => n.node_type === "worker")
+        .map(node => (
+          <option key={node.ip_address} value={node.ip_address}>
+            {node.name} ({node.ip_address})
+          </option>
+        ))}
+    </select>
+  </div>
+
   <div className="graphs-grid">
-    {/* CPU */}
+
     <div className="graph-card">
       <h4>CPU Utilization</h4>
       {metricsData.cpu?.labels?.length > 0 ? (
@@ -517,7 +538,6 @@ const processMetrics = (data) => {
       )}
     </div>
 
-    {/* Memory */}
     <div className="graph-card">
       <h4>Memory Utilization</h4>
       {metricsData.memory?.labels?.length > 0 ? (
@@ -530,7 +550,6 @@ const processMetrics = (data) => {
       )}
     </div>
 
-    {/* GPU */}
     <div className="graph-card">
       <h4>GPU Utilization</h4>
       {metricsData.gpu?.labels?.length > 0 ? (
@@ -542,9 +561,11 @@ const processMetrics = (data) => {
         <p style={{ color: '#666', textAlign: 'center' }}>Loading GPU data...</p>
       )}
     </div>
+
   </div>
 </div>
       </div>
+      
       <style>{`
                 /* ResourceAllocation.css */
 .resource-allocation {

@@ -88,71 +88,78 @@ router.delete("/resource-limits", async (req, res) => {
 
 
 
+
+
 // for testing purposes only
 
 // Temporary mock for local testing - comment out real endpoint above
-router.get("/metrics", async (req, res) => {
-  const { type = 'cluster', range = '5m', step = '15s' } = req.query;  // Keep params for realism
+// router.get("/metrics", async (req, res) => {
+//   const { type = 'cluster', range = '5m', step = '15s' } = req.query;  // Keep params for realism
 
-  // Generate fake time-series data (20 points, 15s intervals, values 30-80%)
-  const mockTimeSeries = (length = 20) => {
-    const now = Math.floor(Date.now() / 1000);
-    return [{
-      metric: { __name__: type },
-      values: Array.from({ length }, (_, i) => [
-        now - (length - i) * 15,  // Timestamps
-        (30 + Math.random() * 50).toFixed(2)  // Random % value
-      ])
-    }];
-  };
+//   // Generate fake time-series data (20 points, 15s intervals, values 30-80%)
+//   const mockTimeSeries = (length = 20) => {
+//     const now = Math.floor(Date.now() / 1000);
+//     return [{
+//       metric: { __name__: type },
+//       values: Array.from({ length }, (_, i) => [
+//         now - (length - i) * 15,  // Timestamps
+//         (30 + Math.random() * 50).toFixed(2)  // Random % value
+//       ])
+//     }];
+//   };
 
-  let result;
-  switch (type) {
-    case 'cpu':    result = mockTimeSeries(); break;
-    case 'memory': result = mockTimeSeries(); break;
-    case 'gpu':    result = mockTimeSeries(); break;
-    default:       result = [];
-  }
+//   let result;
+//   switch (type) {
+//     case 'cpu':    result = mockTimeSeries(); break;
+//     case 'memory': result = mockTimeSeries(); break;
+//     case 'gpu':    result = mockTimeSeries(); break;
+//     default:       result = [];
+//   }
 
-  res.json(result);  // Matches Prometheus format: array of {metric, values}
-});
+//   res.json(result);  // Matches Prometheus format: array of {metric, values}
+// });
+
+
+
+
 
 // // Real-time metrics endpoint (cluster/node/job utilization)
-// router.get("/metrics", async (req, res) => {
-//   try {
-//     const { type = 'cluster', nodeIp, jobId, range = '5m', step = '15s' } = req.query;  // Params: type (cluster/node/job), optional nodeIp/jobId
-//     let query;
+router.get("/metrics", async (req, res) => {
+  try {
+    const { type = 'cluster', nodeIp, jobId, range = '5m', step = '15s' } = req.query;  // Params: type (cluster/node/job), optional nodeIp/jobId
+    let query;
 
-//     switch (type) {
-//       case 'cpu':  // Cluster CPU % over time
-//         query = `rate(node_cpu_seconds_total{mode!="idle"}[${range}]) * 100`;
-//         break;
-//       case 'memory':  // Memory used %
-//         query = `(node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes * 100`;
-//         break;
-//       case 'gpu':  // GPU utilization (DCGM)
-//         query = `DCGM_FI_DEV_GPU_UTIL`;
-//         break;
-//       case 'job_cpu':  // Per-job CPU (if jobId)
-//         if (!jobId) throw new Error('jobId required');
-//         query = `slurm_job_core_usage_total{jobid="${jobId}"}`;
-//         break;
-//       // Add more: disk_io (node_disk_io_time_seconds_total), network (node_network_receive_bytes_total), etc.
-//       default:
-//         throw new Error('Invalid metric type');
-//     }
+    switch (type) {
+      case 'cpu':  // Cluster CPU % over time
+        query = `rate(node_cpu_seconds_total{mode!="idle"}[${range}]) * 100`;
+        break;
+      case 'memory':  // Memory used %
+        query = `(node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes * 100`;
+        break;
+      case 'gpu':  // GPU utilization (DCGM)
+        query = `DCGM_FI_DEV_GPU_UTIL`;
+        break;
+      case 'job_cpu':  // Per-job CPU (if jobId)
+        if (!jobId) throw new Error('jobId required');
+        query = `slurm_job_core_usage_total{jobid="${jobId}"}`;
+        break;
+      // Add more: disk_io (node_disk_io_time_seconds_total), network (node_network_receive_bytes_total), etc.
+      default:
+        throw new Error('Invalid metric type');
+    }
 
-//     // If node-specific, add instance filter
-//     if (nodeIp) query += `{instance="${nodeIp}:${node_exporter_port}"}`;
+    // If node-specific, add instance filter
+    if (nodeIp) query += `{instance="${nodeIp}:9100"}`;
 
-//     const promUrl = `${process.env.PROMETHEUS_URL}/api/v1/query_range?query=${encodeURIComponent(query)}&start=${Date.now()/1000 - 300}&end=${Date.now()/1000}&step=${step}`;
-//     const response = await axios.get(promUrl, { timeout: 10000 });
-//     res.json(response.data.data.result);  // Returns time-series [{ metric: {}, values: [[timestamp, value]] }]
-//   } catch (error) {
-//     console.error("Metrics error:", error.message);
-//     res.status(500).json({ message: "Failed to fetch metrics", error: error.message });
-//   }
-// });
+    const promUrl = `${process.env.PROMETHEUS_URL}/api/v1/query_range?query=${encodeURIComponent(query)}&start=${Date.now()/1000 - 300}&end=${Date.now()/1000}&step=${step}`;
+    
+    const response = await axios.get(promUrl, { timeout: 10000 });
+    res.json(response.data.data.result);  // Returns time-series [{ metric: {}, values: [[timestamp, value]] }]
+  } catch (error) {
+    console.error("Metrics error:", error.message);
+    res.status(500).json({ message: "Failed to fetch metrics", error: error.message });
+  }
+});
 
 
 module.exports = router;
