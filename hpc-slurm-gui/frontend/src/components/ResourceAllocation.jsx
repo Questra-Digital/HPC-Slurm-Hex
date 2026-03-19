@@ -155,19 +155,19 @@ useEffect(() => {
 
       // ────────────── TEMPORARY LOCAL MOCK FOR SLURM NODES ──────────────
       // Comment out real fetch during local testing
-      // const slurmNodesRes = await fetch(`${API_BASE_URL}/nodes/slurm-nodes`);
-      // if (slurmNodesRes.ok) {
-      //   const slurmData = await slurmNodesRes.json();
-      //   setSlurmNodes(slurmData.nodes || []);
-      // }
+      const slurmNodesRes = await fetch(`${API_BASE_URL}/nodes/slurm-nodes`);
+      if (slurmNodesRes.ok) {
+        const slurmData = await slurmNodesRes.json();
+        setSlurmNodes(slurmData.nodes || []);
+      }
 
       // Fake data so cluster totals are non-zero and page renders
-      const mockSlurmNodes = [
-        { name: "master",   cpuTotal: 16, cpuAlloc: 4, realMemory: 32768, gres: "gpu:0" },
-        { name: "compute1", cpuTotal: 8,  cpuAlloc: 2, realMemory: 16384, gres: "gpu:0" },
-        { name: "compute2", cpuTotal: 8,  cpuAlloc: 0, realMemory: 16384, gres: "gpu:0" },
-      ];
-      setSlurmNodes(mockSlurmNodes);
+      // const mockSlurmNodes = [
+      //   { name: "master",   cpuTotal: 16, cpuAlloc: 4, realMemory: 32768, gres: "gpu:0" },
+      //   { name: "compute1", cpuTotal: 8,  cpuAlloc: 2, realMemory: 16384, gres: "gpu:0" },
+      //   { name: "compute2", cpuTotal: 8,  cpuAlloc: 0, realMemory: 16384, gres: "gpu:0" },
+      // ];
+      // setSlurmNodes(mockSlurmNodes);
       // ────────────────────────────────────────────────────────────────
 
       setNodes(nodesData);

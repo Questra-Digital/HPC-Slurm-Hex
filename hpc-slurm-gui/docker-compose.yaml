@@ -36,17 +36,20 @@ services:
   grafana:
     image: grafana/grafana:latest
     container_name: hpc-grafana
+    user: "472:472"   # ← Add this line to avoid permission errors
     ports:
-      - "3000:3000"  # Access http://host:3000 for config (admin/admin)
+      - "3000:3000"   # Optional: expose for direct access during setup
     volumes:
-      - ./grafana-data:/var/lib/grafana  # Persist
+      - ./grafana-data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=your_secure_pass  # Change
+      - GF_SECURITY_ADMIN_PASSWORD=admin   # Change later
+      - GF_USERS_ALLOW_SIGN_UP=false
     networks:
       - slurm-hpc-network
-    depends_on:
-      - backend
+    restart: always
+    # depends_on:
+      # - backend
       
 networks:
   slurm-hpc-network:
