@@ -33,7 +33,9 @@ export default function ResourceAllocation() {
   const [isLoading, setIsLoading] = useState(true);
   const [saveStatus, setSaveStatus] = useState({ message: "", type: "" });
   const [selectedNodeIp, setSelectedNodeIp] = useState("");
-  
+  const [timeRange, setTimeRange] = useState('5m');
+  const [refreshRate, setRefreshRate] = useState(15);   // default 15 seconds
+
   const calculateClusterTotals = () => {
     // Use Slurm nodes if available, otherwise fall back to database nodes
     if (slurmNodes.length > 0) {
@@ -70,9 +72,9 @@ useEffect(() => {
   const fetchMetrics = async () => {
     try {
       const [cpuRes, memRes, gpuRes] = await Promise.all([
-        axios.get(`${API_BASE_URL}/resources/metrics?type=cpu&range=5m&step=15s${selectedNodeIp ? `&nodeIp=${selectedNodeIp}` : ''}`),
-        axios.get(`${API_BASE_URL}/resources/metrics?type=memory&range=5m&step=15s${selectedNodeIp ? `&nodeIp=${selectedNodeIp}` : ''}`),
-        axios.get(`${API_BASE_URL}/resources/metrics?type=gpu&range=5m&step=15s${selectedNodeIp ? `&nodeIp=${selectedNodeIp}` : ''}`)
+        axios.get(`${API_BASE_URL}/resources/metrics?type=cpu&range=${timeRange}&step=${refreshRate}s${selectedNodeIp ? `&nodeIp=${selectedNodeIp}` : ''}`),
+        axios.get(`${API_BASE_URL}/resources/metrics?type=memory&range=${timeRange}&step=${refreshRate}s${selectedNodeIp ? `&nodeIp=${selectedNodeIp}` : ''}`),
+        axios.get(`${API_BASE_URL}/resources/metrics?type=gpu&range=${timeRange}&step=${refreshRate}s${selectedNodeIp ? `&nodeIp=${selectedNodeIp}` : ''}`)
       ]);
       setMetricsData({
         cpu: processMetrics(cpuRes.data),  // Helper to format {labels: timestamps, datasets: [{data: values}]}
@@ -84,9 +86,13 @@ useEffect(() => {
     }
   };
   fetchMetrics();
-  const interval = setInterval(fetchMetrics, 15000);  // Real-time
+// Dynamic refresh rate
+  const interval = setInterval(fetchMetrics, refreshRate * 1000);
+
   return () => clearInterval(interval);
-}, []);
+}, [timeRange, selectedNodeIp, refreshRate]);   // ← refreshRate added here
+
+
 
 
 // Temporary commented for debugging
@@ -190,20 +196,62 @@ useEffect(() => {
 
 // Helper
 // Helper to format Prometheus/mock data for Chart.js
+// const processMetrics = (data) => {
+
+//   if (!data || data.length === 0 || !data[0].values) {
+//     return { labels: [], datasets: [{ data: [] }] };  // Empty fallback
+//   }
+//   const labels = data[0].values.map(([ts]) => new Date(ts * 1000).toLocaleTimeString());  // Timestamps to labels
+//   const values = data[0].values.map(([, val]) => parseFloat(val));  // Values to numbers
+//   return {
+//     labels,
+//     datasets: [{
+//       label: 'Utilization %',
+//       data: values,
+//       borderColor: 'rgb(75, 192, 192)',
+//       tension: 0.1
+//     }]
+//   };
+// };
+
+// Helper to format Prometheus/mock data for Chart.js
 const processMetrics = (data) => {
-  if (!data || data.length === 0 || !data[0].values) {
-    return { labels: [], datasets: [{ data: [] }] };  // Empty fallback
+  if (!data || data.length === 0 || !data[0]?.values?.length) {
+    return { 
+      labels: [], 
+      datasets: [{ data: [] }], 
+      current: 0, 
+      avg: 0, 
+      max: 0 
+    };
   }
-  const labels = data[0].values.map(([ts]) => new Date(ts * 1000).toLocaleTimeString());  // Timestamps to labels
-  const values = data[0].values.map(([, val]) => parseFloat(val));  // Values to numbers
+
+  const rawValues = data[0].values.map(([, val]) => parseFloat(val));
+  const labels = data[0].values.map(([ts]) => 
+    new Date(ts * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  );
+
+  const current = rawValues[rawValues.length - 1] || 0;
+  const avg = rawValues.length 
+    ? (rawValues.reduce((a, b) => a + b, 0) / rawValues.length).toFixed(1) 
+    : 0;
+  const max = rawValues.length ? Math.max(...rawValues) : 0;
+
   return {
     labels,
     datasets: [{
       label: 'Utilization %',
-      data: values,
-      borderColor: 'rgb(75, 192, 192)',
-      tension: 0.1
-    }]
+      data: rawValues,
+      borderColor: '#10b981',
+      backgroundColor: 'rgba(16, 185, 129, 0.1)',
+      tension: 0.3,
+      borderWidth: 3,
+      pointRadius: 0,
+      pointHoverRadius: 4,
+    }],
+    current: parseFloat(current.toFixed(1)),
+    avg: parseFloat(avg),
+    max: parseFloat(max.toFixed(1)),
   };
 };
 
@@ -310,6 +358,46 @@ const processMetrics = (data) => {
   };
 
   const clusterTotals = calculateClusterTotals();
+
+// Testing better UI
+const chartOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: { display: false },
+    tooltip: {
+      mode: 'index',
+      intersect: false,
+      backgroundColor: 'rgba(15, 23, 42, 0.95)',
+      titleColor: '#fff',
+      bodyColor: '#fff',
+      displayColors: false,
+      callbacks: {
+        label: (ctx) => `${ctx.raw.toFixed(1)}%`
+      }
+    }
+  },
+  scales: {
+    x: {
+      grid: { color: '#e2e8f0', lineWidth: 0.5 },
+      ticks: { color: '#64748b', font: { size: 11 } }
+    },
+    y: {
+      beginAtZero: true,
+      max: 100,
+      grid: { color: '#e2e8f0' },
+      ticks: {
+        color: '#64748b',
+        font: { size: 11 },
+        callback: (v) => v + '%'
+      }
+    }
+  },
+  elements: {
+    line: { tension: 0.3, borderWidth: 3 },
+    point: { radius: 0, hoverRadius: 4 }
+  }
+};
 
   console.log("metricsData shape:", {
   cpu: metricsData.cpu,
@@ -503,67 +591,130 @@ const processMetrics = (data) => {
 
 
 
+
+{/* Testing better UI */}
+
+{/* ==================== MODERN METRICS SECTION ==================== */}
+{/* ==================== MODERN METRICS SECTION ==================== */}
 <div className="metrics-section">
+  <div className="metrics-header">
   <h3>Real-Time Resource Utilization</h3>
-  
-  {/* Per-node selector */}
-  <div className="input-group" style={{maxWidth: '300px', marginBottom: '15px'}}>
-    <label>Select Node (or Cluster-wide)</label>
-    <select 
-      value={selectedNodeIp || ''} 
-      onChange={(e) => setSelectedNodeIp(e.target.value)}
-    >
-      <option value="">All Nodes (Cluster-wide)</option>
-      {nodes
-        .filter(n => n.node_type === "worker")
-        .map(node => (
+
+  <div className="controls-row">
+    {/* Time Range */}
+    <div className="time-range">
+      {['10s', '30s', '1m', '5m', '15m', '1h', '6h', '24h'].map((range) => (
+        <button
+          key={range}
+          className={`time-btn ${timeRange === range ? 'active' : ''}`}
+          onClick={() => setTimeRange(range)}
+        >
+          {range}
+        </button>
+      ))}
+    </div>
+
+    {/* Refresh Rate Selector */}
+    <div className="refresh-selector">
+      <select 
+        value={refreshRate} 
+        onChange={(e) => setRefreshRate(Number(e.target.value))}
+        className="refresh-select"
+      >
+        <option value={5}>Refresh: 5s</option>
+        <option value={10}>Refresh: 10s</option>
+        <option value={15}>Refresh: 15s</option>
+        <option value={30}>Refresh: 30s</option>
+        <option value={60}>Refresh: 60s</option>
+      </select>
+    </div>
+
+    {/* Node Selector (already there) */}
+    <div className="node-selector">
+      <select
+        value={selectedNodeIp}
+        onChange={(e) => setSelectedNodeIp(e.target.value)}
+        className="node-select"
+      >
+        <option value="">All Nodes (Cluster)</option>
+        {nodes.filter(n => n.node_type === "worker").map(node => (
           <option key={node.ip_address} value={node.ip_address}>
             {node.name} ({node.ip_address})
           </option>
         ))}
-    </select>
-  </div>
-
-  <div className="graphs-grid">
-
-    <div className="graph-card">
-      <h4>CPU Utilization</h4>
-      {metricsData.cpu?.labels?.length > 0 ? (
-        <Line
-          data={metricsData.cpu}
-          options={{ responsive: true, scales: { y: { beginAtZero: true, max: 100 } } }}
-        />
-      ) : (
-        <p style={{ color: '#666', textAlign: 'center' }}>Loading CPU data...</p>
-      )}
+      </select>
     </div>
-
-    <div className="graph-card">
-      <h4>Memory Utilization</h4>
-      {metricsData.memory?.labels?.length > 0 ? (
-        <Line
-          data={metricsData.memory}
-          options={{ responsive: true, scales: { y: { beginAtZero: true, max: 100 } } }}
-        />
-      ) : (
-        <p style={{ color: '#666', textAlign: 'center' }}>Loading Memory data...</p>
-      )}
-    </div>
-
-    <div className="graph-card">
-      <h4>GPU Utilization</h4>
-      {metricsData.gpu?.labels?.length > 0 ? (
-        <Line
-          data={metricsData.gpu}
-          options={{ responsive: true, scales: { y: { beginAtZero: true, max: 100 } } }}
-        />
-      ) : (
-        <p style={{ color: '#666', textAlign: 'center' }}>Loading GPU data...</p>
-      )}
-    </div>
-
   </div>
 </div>
+
+  <div className="graphs-grid">
+    {/* CPU Card */}
+    <div className="graph-card">
+      <div className="graph-header">
+        <div className="graph-title">
+          <span>CPU</span>
+          <span className="current-value">{metricsData.cpu?.current || 0}%</span>
+        </div>
+        <div className="graph-stats">
+          <span>Avg: {metricsData.cpu?.avg || 0}%</span>
+          <span>Max: {metricsData.cpu?.max || 0}%</span>
+        </div>
+      </div>
+      <div className="chart-wrapper">
+        {metricsData.cpu?.labels?.length > 0 ? (
+          <Line data={metricsData.cpu} options={chartOptions} />
+        ) : (
+          <div className="empty-chart">Waiting for CPU data...</div>
+        )}
+      </div>
+    </div>
+
+    {/* Memory Card */}
+    <div className="graph-card">
+      <div className="graph-header">
+        <div className="graph-title">
+          <span>Memory</span>
+          <span className="current-value">{metricsData.memory?.current || 0}%</span>
+        </div>
+        <div className="graph-stats">
+          <span>Avg: {metricsData.memory?.avg || 0}%</span>
+          <span>Max: {metricsData.memory?.max || 0}%</span>
+        </div>
+      </div>
+      <div className="chart-wrapper">
+        {metricsData.memory?.labels?.length > 0 ? (
+          <Line data={metricsData.memory} options={chartOptions} />
+        ) : (
+          <div className="empty-chart">Waiting for Memory data...</div>
+        )}
+      </div>
+    </div>
+
+    {/* GPU Card */}
+    <div className="graph-card">
+      <div className="graph-header">
+        <div className="graph-title">
+          <span>GPU</span>
+          <span className="current-value">{metricsData.gpu?.current || 0}%</span>
+        </div>
+        <div className="graph-stats">
+          <span>Avg: {metricsData.gpu?.avg || 0}%</span>
+          <span>Max: {metricsData.gpu?.max || 0}%</span>
+        </div>
+      </div>
+      <div className="chart-wrapper">
+        {metricsData.gpu?.labels?.length > 0 ? (
+          <Line data={metricsData.gpu} options={chartOptions} />
+        ) : (
+          <div className="empty-chart">No GPU detected</div>
+        )}
+      </div>
+    </div>
+  </div>
+</div>
+
+
+
       </div>
       
       <style>{`
@@ -579,11 +730,18 @@ const processMetrics = (data) => {
 
   .metrics-section {
   margin-top: 30px;
-  padding: 20px;
-  background-color: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-  border: 1px solid #e1e8ed;
+  padding: 24px;
+  background: linear-gradient(145deg, #0f172a, #1e2937);
+  border-radius: 16px;
+  box-shadow: 0 10px 25px -5px rgb(15 23 42 / 0.1);
+  color: white;
+}
+
+.metrics-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
 }
 
 .metrics-section h3 {
@@ -591,19 +749,153 @@ const processMetrics = (data) => {
   color: #1a5276;
 }
 
+
+.metrics-header h3 {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 600;
+  color: #e2e8f0;
+}
+
+.time-range {
+  display: flex;
+  gap: 6px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 9999px;
+  padding: 4px;
+}
+
+.time-btn {
+  padding: 6px 16px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border-radius: 9999px;
+  border: none;
+  background: transparent;
+  color: #cbd5e1;
+  transition: all 0.2s;
+}
+
+.time-btn.active {
+  background: white;
+  color: #0f172a;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
 .graphs-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-  gap: 20px;
-  margin-top: 15px;
+  grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+  gap: 24px;
 }
 
 .graph-card {
-  background: #f8f9fa;
-  padding: 15px;
-  border-radius: 6px;
-  border: 1px solid #e1e8ed;
+  background: rgba(255,255,255,0.95);
+  border-radius: 12px;
+  padding: 20px;
+  color: #0f172a;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+  transition: transform 0.2s;
 }
+
+.graph-card:hover {
+  transform: translateY(-3px);
+}
+
+.graph-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.graph-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.current-value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #10b981;
+  margin-left: 12px;
+}
+
+.graph-stats {
+  font-size: 0.85rem;
+  color: #64748b;
+  display: flex;
+  gap: 16px;
+}
+
+.empty-chart {
+  height: 280px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #94a3b8;
+  font-style: italic;
+}
+
+.chart-wrapper {
+  height: 280px;           /* This is the key fix - prevents infinite growth */
+  position: relative;
+  width: 100%;
+  margin-top: 8px;
+}
+
+.chart-wrapper canvas {
+  max-height: 100% !important;
+}
+  
+
+.controls-row {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.node-selector {
+  margin-left: auto;
+}
+
+.node-select {
+  padding: 8px 12px;
+  border-radius: 9999px;
+  background: rgba(255,255,255,0.1);
+  color: #e2e8f0;
+  border: none;
+  font-size: 0.875rem;
+  min-width: 220px;
+}
+
+.node-select:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.3);
+}
+
+.refresh-selector {
+  margin-left: 8px;
+}
+
+.refresh-select {
+  padding: 8px 14px;
+  border-radius: 9999px;
+  background: rgba(255,255,255,0.1);
+  color: #e2e8f0;
+  border: none;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+// ----------------------------
+
+
+// .graph-card {
+//   background: #f8f9fa;
+//   padding: 15px;
+//   border-radius: 6px;
+//   border: 1px solid #e1e8ed;
+// }
 
 .graph-card h4 {
   margin: 0 0 10px 0;
