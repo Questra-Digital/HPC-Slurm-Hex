@@ -1,10 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
 import Swal from 'sweetalert2';
-import { API_BASE_URL } from "../config";
 
-const Login = ({ setUser }) => {
+const Login = ({ onLogin, syncIssue }) => {
   
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -17,25 +15,12 @@ const Login = ({ setUser }) => {
     setIsLoading(true);
 
     try {
-      const res = await axios.post(`${API_BASE_URL}/auth/login`, { email, password });
-
-      sessionStorage.setItem('id', res.data.userId);
-      sessionStorage.setItem('user_role', res.data.role);
-      sessionStorage.setItem('username', res.data.name);
-      sessionStorage.setItem('email', email);
-
-      // NEW: Fetch and store user permissions
-      const permissionsRes = await axios.get(
-        `${API_BASE_URL}/users/users/${res.data.userId}/permissions`
-      );
-      sessionStorage.setItem('permissions', JSON.stringify(permissionsRes.data.permissions));
-
-      setUser(res.data.name);
+      const res = onLogin ? await onLogin({ email, password }) : null;
 
       Swal.fire({
         icon: 'success',
         title: 'Welcome back!',
-        text: `Successfully logged in as ${res.data.name}`,
+        text: `Successfully logged in as ${res?.name || email}`,
         showConfirmButton: false,
         timer: 1500
       });
@@ -45,7 +30,7 @@ const Login = ({ setUser }) => {
       Swal.fire({
         icon: 'error',
         title: 'Login Failed',
-        text: error.response?.data?.message || 'Something went wrong. Please try again.',
+        text: error.response?.data?.message || error.message || 'Something went wrong. Please try again.',
       });
     } finally {
       setIsLoading(false);
@@ -59,6 +44,8 @@ const Login = ({ setUser }) => {
           <h1>Welcome Back</h1>
           <p className="subtitle">Sign in to access your SLURM dashboard</p>
         </div>
+
+        {syncIssue ? <div className="sync-issue-message">{syncIssue}</div> : null}
 
         <form onSubmit={handleSubmit} className="setup-form">
           <div className="input-group">
@@ -147,6 +134,16 @@ const Login = ({ setUser }) => {
           flex-direction: column;
           gap: 1.5rem;
           padding: 0 1rem;
+        }
+
+        .sync-issue-message {
+          margin: 0 1rem 1rem;
+          padding: 0.75rem;
+          border-radius: 8px;
+          background: #fef3c7;
+          border: 1px solid #fcd34d;
+          color: #92400e;
+          font-size: 0.9rem;
         }
 
         .input-group {

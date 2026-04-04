@@ -2,7 +2,6 @@ import React from 'react';
 import { render, screen, waitFor, act } from '@testing-library/react';
 import Dashboard from '../components/Dashboard';
 import axios from 'axios';
-import { API_BASE_URL } from '../config';
 import '@testing-library/jest-dom';
 
 // Mock lucide-react icons
@@ -20,48 +19,33 @@ jest.mock('lucide-react', () => ({
 
 // Mock axios
 jest.mock('axios');
-
-// Mock sessionStorage
-const mockSessionStorage = (() => {
-  let store = {};
-  return {
-    getItem: jest.fn((key) => store[key] || null),
-    setItem: jest.fn((key, value) => {
-      store[key] = value.toString();
-    }),
-    clear: jest.fn(() => {
-      store = {};
-    }),
-    removeItem: jest.fn((key) => {
-      delete store[key];
-    }),
-  };
-})();
-
-Object.defineProperty(window, 'sessionStorage', {
-  value: mockSessionStorage,
-});
+jest.mock('../config', () => ({
+  API_BASE_URL: 'http://localhost/api',
+  MASTER_PORT: '5053',
+}));
 
 describe('Dashboard Component', () => {
   const mockSetActiveMenuItem = jest.fn();
+  const regularAuthUser = {
+    username: 'testuser',
+    role: 'user'
+  };
+  const adminAuthUser = {
+    username: 'adminuser',
+    role: 'admin'
+  };
   
   beforeEach(() => {
     jest.clearAllMocks();
-    window.sessionStorage.clear();
   });
 
   it('renders without crashing', () => {
-    render(<Dashboard setActiveMenuItem={mockSetActiveMenuItem} />);
+    render(<Dashboard setActiveMenuItem={mockSetActiveMenuItem} authUser={regularAuthUser} />);
     expect(screen.getByText('Total Jobs')).toBeInTheDocument();
   });
 
-  it('displays the correct username from sessionStorage', () => {
-    window.sessionStorage.getItem.mockImplementation((key) => {
-      if (key === 'username') return 'testuser';
-      return null;
-    });
-    
-    render(<Dashboard setActiveMenuItem={mockSetActiveMenuItem} />);
+  it('uses authUser prop for filtering context', () => {
+    render(<Dashboard setActiveMenuItem={mockSetActiveMenuItem} authUser={regularAuthUser} />);
     expect(screen.getByText('Total Jobs')).toBeInTheDocument();
   });
 
@@ -69,19 +53,13 @@ describe('Dashboard Component', () => {
     axios.get.mockResolvedValueOnce({ 
       data: [{ node_type: 'master', ip_address: '192.168.1.1' }] 
     });
-    render(<Dashboard setActiveMenuItem={mockSetActiveMenuItem} />);
+    render(<Dashboard setActiveMenuItem={mockSetActiveMenuItem} authUser={regularAuthUser} />);
     await waitFor(() => {
-      expect(axios.get).toHaveBeenCalledWith(`${API_BASE_URL}/nodes/get-nodes-list`);
+      expect(axios.get).toHaveBeenCalledWith('/nodes/get-nodes-list', { retrySafe: true });
     });
   });
 
   it('filters jobs based on user role', async () => {
-    window.sessionStorage.getItem.mockImplementation((key) => {
-      if (key === 'username') return 'testuser';
-      if (key === 'user_role') return 'user';
-      return null;
-    });
-    
     axios.get.mockImplementation((url) => {
       if (url.includes('get-nodes-list')) {
         return Promise.resolve({ data: [{ node_type: 'master', ip_address: '192.168.1.1' }] });
@@ -96,7 +74,7 @@ describe('Dashboard Component', () => {
       });
     });
     
-    render(<Dashboard setActiveMenuItem={mockSetActiveMenuItem} />);
+    render(<Dashboard setActiveMenuItem={mockSetActiveMenuItem} authUser={regularAuthUser} />);
     
     await waitFor(() => {
       expect(screen.getByText('job1')).toBeInTheDocument();
@@ -105,12 +83,6 @@ describe('Dashboard Component', () => {
   });
 
   it('shows all jobs for admin users', async () => {
-    window.sessionStorage.getItem.mockImplementation((key) => {
-      if (key === 'username') return 'adminuser';
-      if (key === 'user_role') return 'admin';
-      return null;
-    });
-    
     axios.get.mockImplementation((url) => {
       if (url.includes('get-nodes-list')) {
         return Promise.resolve({ data: [{ node_type: 'master', ip_address: '192.168.1.1' }] });
@@ -125,7 +97,7 @@ describe('Dashboard Component', () => {
       });
     });
     
-    render(<Dashboard setActiveMenuItem={mockSetActiveMenuItem} />);
+    render(<Dashboard setActiveMenuItem={mockSetActiveMenuItem} authUser={adminAuthUser} />);
     
     await waitFor(() => {
       expect(screen.getByText('job1')).toBeInTheDocument();
@@ -150,7 +122,7 @@ describe('Dashboard Component', () => {
       });
     });
     
-    render(<Dashboard setActiveMenuItem={mockSetActiveMenuItem} />);
+    render(<Dashboard setActiveMenuItem={mockSetActiveMenuItem} authUser={regularAuthUser} />);
     
     await waitFor(() => {
       expect(screen.getByText('Total Jobs').nextSibling).toHaveTextContent('4');
@@ -177,7 +149,7 @@ describe('Dashboard Component', () => {
       });
     });
     
-    render(<Dashboard setActiveMenuItem={mockSetActiveMenuItem} />);
+    render(<Dashboard setActiveMenuItem={mockSetActiveMenuItem} authUser={regularAuthUser} />);
     
     await waitFor(() => {
       expect(screen.getByText('RUNNING').closest('span')).toHaveClass('running');
@@ -189,7 +161,7 @@ describe('Dashboard Component', () => {
   it('handles API errors gracefully', async () => {
     axios.get.mockRejectedValueOnce(new Error('Network Error'));
     
-    render(<Dashboard setActiveMenuItem={mockSetActiveMenuItem} />);
+    render(<Dashboard setActiveMenuItem={mockSetActiveMenuItem} authUser={regularAuthUser} />);
     
     await waitFor(() => {
       expect(screen.getByText('Total Jobs').nextSibling).toHaveTextContent('0');
@@ -200,7 +172,7 @@ describe('Dashboard Component', () => {
 
 
   it('calls setActiveMenuItem when quick action buttons are clicked', async () => {
-    render(<Dashboard setActiveMenuItem={mockSetActiveMenuItem} />);
+    render(<Dashboard setActiveMenuItem={mockSetActiveMenuItem} authUser={regularAuthUser} />);
     
     const manageJobsButton = screen.getByText('Manage Jobs');
     act(() => {
@@ -249,7 +221,7 @@ describe('Dashboard Component', () => {
       });
     });
     
-    render(<Dashboard setActiveMenuItem={mockSetActiveMenuItem} />);
+    render(<Dashboard setActiveMenuItem={mockSetActiveMenuItem} authUser={regularAuthUser} />);
     
     await waitFor(() => {
       expect(screen.getByText(/hour ago/)).toBeInTheDocument();

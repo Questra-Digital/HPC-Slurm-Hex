@@ -1,6 +1,5 @@
 import React,{ useState, useEffect } from "react";
-import axios from "axios";
-import { API_BASE_URL } from "../config";
+import apiClient from "../api/client";
 
 export default function RemoteNodes() {
     const [masterNode, setMasterNode] = useState({ name: "", ip_address: "" });
@@ -11,7 +10,7 @@ export default function RemoteNodes() {
     useEffect(() => {
         async function fetchSavedNodes() {
             try {
-                const response = await axios.get(`${API_BASE_URL}/nodes/get-nodes-list`);
+              const response = await apiClient.get('/nodes/get-nodes-list', { retrySafe: true });
                 const nodes = response.data;
 
                 if (nodes.length > 0) {
@@ -76,7 +75,7 @@ export default function RemoteNodes() {
 
 
     try {
-        const res = await axios.post(`${API_BASE_URL}/nodes/connect`, payload);
+      const res = await apiClient.post('/nodes/connect', payload, { retrySafe: false });
 
         setStatuses(prev => ({
             ...prev,
@@ -94,9 +93,9 @@ export default function RemoteNodes() {
 
     const resetNodes = async () => {
         try {
-            const res = await axios.post(`${API_BASE_URL}/nodes/reset-nodes`);
+        const res = await apiClient.post('/nodes/reset-nodes', {}, { retrySafe: false });
             console.log(res.data.message);
-            const response = await axios.get(`${API_BASE_URL}/nodes/get-nodes-list`);
+        await apiClient.get('/nodes/get-nodes-list', { retrySafe: true });
             setMasterNode({ name: "", ip_address: "" });
             setWorkerNodes([]);
             setWorkerCount(0);

@@ -5,7 +5,22 @@ const router = express.Router();
 
 router.get("/resource-limits", async (req, res) => {
     try {
+        if (!req.auth) {
+            return res.status(401).json({ message: "Unauthorized" });
+        }
+
         const { user_id, group_id } = req.query;
+
+        if (req.auth.role !== "admin") {
+            if (group_id) {
+                return res.status(403).json({ message: "Forbidden" });
+            }
+
+            if (user_id && Number(user_id) !== req.auth.userId) {
+                return res.status(403).json({ message: "Forbidden" });
+            }
+        }
+
         let whereClause = {};
         
         if (user_id) whereClause.user_id = user_id;
@@ -25,6 +40,14 @@ router.get("/resource-limits", async (req, res) => {
 
 router.post("/resource-limits", async (req, res) => {
     try {
+        if (!req.auth) {
+            return res.status(401).json({ message: "Unauthorized" });
+        }
+
+        if (req.auth.role !== "admin") {
+            return res.status(403).json({ message: "Forbidden" });
+        }
+
         const { user_id, group_id, max_cpu, max_gpu, max_memory } = req.body;
 
         if (!user_id && !group_id) {
@@ -66,6 +89,14 @@ router.post("/resource-limits", async (req, res) => {
 
 router.delete("/resource-limits", async (req, res) => {
     try {
+        if (!req.auth) {
+            return res.status(401).json({ message: "Unauthorized" });
+        }
+
+        if (req.auth.role !== "admin") {
+            return res.status(403).json({ message: "Forbidden" });
+        }
+
         const { user_id, group_id } = req.query;
 
         if (!user_id && !group_id) {

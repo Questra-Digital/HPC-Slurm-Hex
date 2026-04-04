@@ -76,11 +76,38 @@ const TestResourceLimit = sequelize.define("ResourceLimit", {
     ]
 });
 
+const TestSession = sequelize.define("Session", {
+    id: { type: DataTypes.STRING(64), primaryKey: true },
+    user_id: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        references: { model: TestUser, key: 'id' }
+    },
+    refresh_token_hash: { type: DataTypes.STRING(128), allowNull: false },
+    created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: Sequelize.NOW },
+    last_activity_at: { type: DataTypes.DATE, allowNull: false, defaultValue: Sequelize.NOW },
+    expires_at: { type: DataTypes.DATE, allowNull: false },
+    revoked_at: { type: DataTypes.DATE, allowNull: true },
+    compromised_at: { type: DataTypes.DATE, allowNull: true },
+    device_ip: { type: DataTypes.STRING(64), allowNull: true },
+    user_agent: { type: DataTypes.STRING(512), allowNull: true }
+}, {
+    tableName: 'sessions',
+    indexes: [
+        { fields: ['id'] },
+        { fields: ['user_id'] },
+        { fields: ['revoked_at'] },
+        { fields: ['expires_at'] }
+    ]
+});
+
 // Relationships
 TestUser.belongsToMany(TestGroup, { through: TestUserGroup, foreignKey: 'user_id' });
 TestGroup.belongsToMany(TestUser, { through: TestUserGroup, foreignKey: 'group_id' });
 TestUser.hasOne(TestResourceLimit, { foreignKey: 'user_id' });
 TestGroup.hasOne(TestResourceLimit, { foreignKey: 'group_id' });
+TestUser.hasMany(TestSession, { foreignKey: 'user_id' });
+TestSession.belongsTo(TestUser, { foreignKey: 'user_id' });
 
 // Export models for tests
 global.testDb = {
@@ -89,7 +116,8 @@ global.testDb = {
     Group: TestGroup,
     UserGroup: TestUserGroup,
     Node: TestNode,
-    ResourceLimit: TestResourceLimit
+    ResourceLimit: TestResourceLimit,
+    Session: TestSession
 };
 
 // Apply global mock for all tests

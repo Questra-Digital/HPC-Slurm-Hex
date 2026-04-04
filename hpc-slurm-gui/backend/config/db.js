@@ -1,10 +1,27 @@
+const fs = require("fs");
+const path = require("path");
 const { Sequelize, DataTypes } = require("sequelize");
+
+const storagePath = process.env.SQLITE_STORAGE || path.join(__dirname, "..", "data", "database.sqlite");
+fs.mkdirSync(path.dirname(storagePath), { recursive: true });
 
 const sequelize = new Sequelize({
     dialect: "sqlite",
-    storage: "./database.sqlite",
+    storage: storagePath,
     logging: process.env.NODE_ENV === 'test' ? false : console.log  
 });
+
+const buildSyncOptions = () => {
+    if (process.env.DB_SYNC_FORCE === "true") {
+        return { force: true };
+    }
+
+    if (process.env.DB_SYNC_ALTER === "true") {
+        return { alter: true };
+    }
+
+    return {};
+};
 
 // Models
 const User = sequelize.define("User", {
@@ -82,13 +99,57 @@ const ResourceLimit = sequelize.define("ResourceLimit", {
     ]
 });
 
+const Session = sequelize.define("Session", {
+    id: { type: DataTypes.STRING(64), primaryKey: true },
+    user_id: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        references: { model: User, key: 'id' }
+    },
+    refresh_token_hash: { type: DataTypes.STRING(128), allowNull: false },
+    created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: Sequelize.NOW },
+    last_activity_at: { type: DataTypes.DATE, allowNull: false, defaultValue: Sequelize.NOW },
+    expires_at: { type: DataTypes.DATE, allowNull: false },
+    revoked_at: { type: DataTypes.DATE, allowNull: true },
+    compromised_at: { type: DataTypes.DATE, allowNull: true },
+    device_ip: { type: DataTypes.STRING(64), allowNull: true },
+    user_agent: { type: DataTypes.STRING(512), allowNull: true }
+}, {
+    tableName: 'sessions',
+    indexes: [
+        { fields: ['id'] },
+        { fields: ['user_id'] },
+        { fields: ['revoked_at'] },
+        { fields: ['expires_at'] }
+    ]
+});
+
 // Relationships
 User.belongsToMany(Group, { through: UserGroup, foreignKey: 'user_id' });
 Group.belongsToMany(User, { through: UserGroup, foreignKey: 'group_id' });
 User.hasOne(ResourceLimit, { foreignKey: 'user_id' });
 Group.hasOne(ResourceLimit, { foreignKey: 'group_id' });
+User.hasMany(Session, { foreignKey: 'user_id' });
+Session.belongsTo(User, { foreignKey: 'user_id' });
 
-// Sync database
-sequelize.sync({ alter: true }).then(() => console.log("Database & tables updated!"));
+const syncDatabase = async () => {
+    const syncOptions = buildSyncOptions();
 
-module.exports = { sequelize, User, Group, UserGroup, Node, ResourceLimit };
+    try {
+        await sequelize.sync(syncOptions);
+        console.log(`Database & tables ready (sync options: ${JSON.stringify(syncOptions)})`);
+    } catch (error) {
+        if (syncOptions.alter) {
+            console.error("Database alter sync failed, retrying with safe sync() fallback:", error.message);
+            await sequelize.sync();
+            console.log("Database & tables ready with safe sync() fallback.");
+            return;
+        }
+
+        throw error;
+    }
+};
+
+const dbReady = syncDatabase();
+
+module.exports = { sequelize, User, Group, UserGroup, Node, ResourceLimit, Session, dbReady };

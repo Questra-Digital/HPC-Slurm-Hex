@@ -1,10 +1,13 @@
 const express = require("express");
 const axios = require("axios");
 const { Node } = require("../config/db");
+const { requireRole } = require("../middleware/auth");
 const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 const router = express.Router();
 const port = process.env.SLURM_PORT;
+
+router.use(requireRole("admin"));
 
 // Helper function to get master node IP from database
 const getMasterNodeIp = async () => {

@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
-import { API_BASE_URL } from "../config";
+import apiClient from "../api/client";
 
 export default function UserGroup() {
     // State for users and groups
@@ -49,7 +48,7 @@ export default function UserGroup() {
     // Function to fetch all users
     const fetchUsers = async () => {
         try {
-            const response = await axios.get(`${API_BASE_URL}/users/users`);
+            const response = await apiClient.get('/users/users', { retrySafe: true });
             setUsers(response.data);
         } catch (err) {
             setError("Failed to fetch users");
@@ -60,7 +59,7 @@ export default function UserGroup() {
     // Function to fetch all groups
     const fetchGroups = async () => {
         try {
-            const response = await axios.get(`${API_BASE_URL}/users/groups`);
+            const response = await apiClient.get('/users/groups', { retrySafe: true });
             setGroups(response.data);
         } catch (err) {
             setError("Failed to fetch groups");
@@ -71,7 +70,7 @@ export default function UserGroup() {
     // Function to fetch user-group relationships
     const fetchUserGroups = async () => {
         try {
-            const response = await axios.get(`${API_BASE_URL}/users/user-groups`);
+            const response = await apiClient.get('/users/user-groups', { retrySafe: true });
             setUserGroups(response.data);
         } catch (err) {
             setError("Failed to fetch user-group relationships");
@@ -92,11 +91,11 @@ export default function UserGroup() {
         }
         
         try {
-            const response = await axios.post(`${API_BASE_URL}/auth/signup`, newUser);
+            const response = await apiClient.post('/auth/signup', newUser, { retrySafe: false });
+            const passwordInfo = newUser.password ? "" : " (auto-generated password)";
             
             // Provide clear, user-friendly feedback based on the outcome
             if (response.data.emailSent) {
-                const passwordInfo = newUser.password ? "" : " (auto-generated password)";
                 setSuccess(`✓ User "${newUser.username}" created successfully! Welcome email with credentials${passwordInfo} sent to ${newUser.email}`);
             } else if (response.data.warning) {
                 setSuccess(`✓ User "${newUser.username}" created, but email delivery failed. Please provide credentials${passwordInfo} manually: ${newUser.email}`);
@@ -134,7 +133,7 @@ export default function UserGroup() {
         }
         
         try {
-            await axios.put(`${API_BASE_URL}/users/users/${editingUser.id}`, newUser);
+            await apiClient.put(`/users/users/${editingUser.id}`, newUser, { retrySafe: false });
             setSuccess("User updated successfully");
             setNewUser({ username: "", email: "", password: "" });
             setEditingUser(null);
@@ -148,7 +147,7 @@ export default function UserGroup() {
     const handleDeleteUser = async (userId) => {
         if (window.confirm("Are you sure you want to delete this user?")) {
             try {
-                await axios.delete(`${API_BASE_URL}/users/users/${userId}`);
+                await apiClient.delete(`/users/users/${userId}`, { retrySafe: false });
                 setSuccess("User deleted successfully");
                 fetchUsers();
                 fetchUserGroups();
@@ -168,7 +167,7 @@ export default function UserGroup() {
         setSuccess("");
         
         try {
-            await axios.post(`${API_BASE_URL}/users/groups`, newGroup);
+            await apiClient.post('/users/groups', newGroup, { retrySafe: false });
             setSuccess("Group created successfully");
             setNewGroup({ name: "", permissions: [] });
             fetchGroups();
@@ -190,7 +189,7 @@ export default function UserGroup() {
     const handleUpdateGroup = async (e) => {
         e.preventDefault();
         try {
-            await axios.put(`${API_BASE_URL}/users/groups/${editingGroup.id}`, newGroup);
+            await apiClient.put(`/users/groups/${editingGroup.id}`, newGroup, { retrySafe: false });
             setSuccess("Group updated successfully");
             setNewGroup({ name: "", permissions: [] });
             setEditingGroup(null);
@@ -204,7 +203,7 @@ export default function UserGroup() {
     const handleDeleteGroup = async (groupId) => {
         if (window.confirm("Are you sure you want to delete this group?")) {
             try {
-                await axios.delete(`${API_BASE_URL}/users/groups/${groupId}`);
+                await apiClient.delete(`/users/groups/${groupId}`, { retrySafe: false });
                 setSuccess("Group deleted successfully");
                 fetchGroups();
                 fetchUserGroups();
@@ -226,10 +225,10 @@ export default function UserGroup() {
         }
         
         try {
-            await axios.post(`${API_BASE_URL}/users/user-groups`, {
+            await apiClient.post('/users/user-groups', {
                 user_id: selectedUser,
                 group_id: selectedGroup
-            });
+            }, { retrySafe: false });
             setSuccess("User added to group successfully");
             fetchUserGroups();
         } catch (err) {
@@ -244,7 +243,7 @@ export default function UserGroup() {
         setSuccess("");
         
         try {
-            await axios.delete(`${API_BASE_URL}/users/user-groups`, {
+            await apiClient.delete('/users/user-groups', {
                 data: { user_id: userId, group_id: groupId }
             });
             setSuccess("User removed from group successfully");

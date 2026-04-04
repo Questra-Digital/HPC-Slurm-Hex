@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "jest --detectOpenHandles"
+    "test": "jest --detectOpenHandles",
+    "test:phase4": "jest tests/phase4.e2e.test.js --detectOpenHandles"
   },
   "keywords": [],
   "author": "",
@@ -13,6 +14,7 @@
     "axios": "^1.7.9",
     "basic-ftp": "^5.0.5",
     "bcryptjs": "^2.4.3",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",

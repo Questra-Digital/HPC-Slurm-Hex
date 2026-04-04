@@ -1,6 +1,7 @@
 const express = require("express");
 const bcrypt = require("bcryptjs");
 const { User, Group, UserGroup, ResourceLimit } = require("../config/db");
+const { requireRole } = require("../middleware/auth");
 const router = express.Router();
 
 router.get("/users", async (req, res) => {
@@ -17,8 +18,21 @@ router.get("/users", async (req, res) => {
 
 router.put("/users/:id", async (req, res) => {
     try {
+        if (!req.auth) {
+            return res.status(401).json({ message: "Unauthorized" });
+        }
+
         const { id } = req.params;
         const { username, email, password, role } = req.body;
+        const isSelfUpdate = Number(id) === req.auth.userId;
+
+        if (!isSelfUpdate && req.auth.role !== "admin") {
+            return res.status(403).json({ message: "Forbidden" });
+        }
+
+        if (role && req.auth.role !== "admin") {
+            return res.status(403).json({ message: "Only admins can modify user roles" });
+        }
         
         const user = await User.findByPk(id);
         if (!user) {
@@ -41,7 +55,15 @@ router.put("/users/:id", async (req, res) => {
 
 router.delete("/users/:id", async (req, res) => {
     try {
+        if (!req.auth) {
+            return res.status(401).json({ message: "Unauthorized" });
+        }
+
         const { id } = req.params;
+
+        if (req.auth.role !== "admin") {
+            return res.status(403).json({ message: "Forbidden" });
+        }
         
         const user = await User.findByPk(id);
         if (!user) {
@@ -59,7 +81,7 @@ router.delete("/users/:id", async (req, res) => {
     }
 });
 
-router.get("/groups", async (req, res) => {
+router.get("/groups", requireRole("admin"), async (req, res) => {
     try {
         const groups = await Group.findAll();
         res.json(groups);
@@ -69,7 +91,7 @@ router.get("/groups", async (req, res) => {
     }
 });
 
-router.post("/groups", async (req, res) => {
+router.post("/groups", requireRole("admin"), async (req, res) => {
     try {
         const { name, permissions } = req.body;
         
@@ -99,7 +121,7 @@ router.post("/groups", async (req, res) => {
     }
 });
 
-router.put("/groups/:id", async (req, res) => {
+router.put("/groups/:id", requireRole("admin"), async (req, res) => {
     try {
         const { id } = req.params;
         const { name, permissions } = req.body;
@@ -126,7 +148,7 @@ router.put("/groups/:id", async (req, res) => {
     }
 });
 
-router.delete("/groups/:id", async (req, res) => {
+router.delete("/groups/:id", requireRole("admin"), async (req, res) => {
     try {
         const { id } = req.params;
         
@@ -146,7 +168,7 @@ router.delete("/groups/:id", async (req, res) => {
     }
 });
 
-router.get("/user-groups", async (req, res) => {
+router.get("/user-groups", requireRole("admin"), async (req, res) => {
     try {
         const userGroups = await UserGroup.findAll();
         res.json(userGroups);
@@ -156,7 +178,7 @@ router.get("/user-groups", async (req, res) => {
     }
 });
 
-router.post("/user-groups", async (req, res) => {
+router.post("/user-groups", requireRole("admin"), async (req, res) => {
     try {
         const { user_id, group_id } = req.body;
         
@@ -190,7 +212,7 @@ router.post("/user-groups", async (req, res) => {
     }
 });
 
-router.delete("/user-groups", async (req, res) => {
+router.delete("/user-groups", requireRole("admin"), async (req, res) => {
     try {
         const { user_id, group_id } = req.body;
         
@@ -214,7 +236,7 @@ router.delete("/user-groups", async (req, res) => {
     }
 });
 
-router.get("/groups/:groupId/users", async (req, res) => {
+router.get("/groups/:groupId/users", requireRole("admin"), async (req, res) => {
     try {
         const { groupId } = req.params;
         
@@ -238,7 +260,15 @@ router.get("/groups/:groupId/users", async (req, res) => {
 
 router.get("/users/:userId/groups", async (req, res) => {
     try {
+        if (!req.auth) {
+            return res.status(401).json({ message: "Unauthorized" });
+        }
+
         const { userId } = req.params;
+
+        if (req.auth.role !== "admin" && req.auth.userId !== Number(userId)) {
+            return res.status(403).json({ message: "Forbidden" });
+        }
         
         const userGroups = await UserGroup.findAll({
             where: { user_id: userId }
@@ -260,7 +290,15 @@ router.get("/users/:userId/groups", async (req, res) => {
 // NEW: Route to get user permissions
 router.get("/users/:userId/permissions", async (req, res) => {
     try {
+        if (!req.auth) {
+            return res.status(401).json({ message: "Unauthorized" });
+        }
+
         const { userId } = req.params;
+
+        if (req.auth.role !== "admin" && req.auth.userId !== Number(userId)) {
+            return res.status(403).json({ message: "Forbidden" });
+        }
         
         const user = await User.findByPk(userId);
         if (!user) {

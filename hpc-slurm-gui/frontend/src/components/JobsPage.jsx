@@ -1,11 +1,9 @@
 import React from 'react';
 import { useState, useEffect, useRef } from "react";
-import axios from "axios";
+import apiClient from "../api/client";
 import Swal from 'sweetalert2';
 
-import { API_BASE_URL } from "../config";
-
-export default function JobsPage({ user }) {
+export default function JobsPage({ authUser }) {
   const [jobs, setJobs] = useState([]);
   const [nodes, setNodes] = useState([]);
   const [selectedTab, setSelectedTab] = useState(0);
@@ -18,10 +16,10 @@ export default function JobsPage({ user }) {
   const [cpuRequest, setCpuRequest] = useState("");
   const [gpuRequest, setGpuRequest] = useState("");
   const [memoryRequest, setMemoryRequest] = useState("");
-  const [username] = useState(sessionStorage.getItem("username") || "null");
-  const [userRole] = useState(sessionStorage.getItem("user_role") || "user");
-  const [userId] = useState(sessionStorage.getItem("id") || "null");
-  const [email] = useState(sessionStorage.getItem('email') || "null");
+  const username = authUser?.username || "";
+  const userRole = authUser?.role || "user";
+  const userId = authUser?.id || null;
+  const email = authUser?.email || "";
   const [nextJobId, setNextJobId] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false); // Separate state for submit button
@@ -62,7 +60,7 @@ export default function JobsPage({ user }) {
 
   const checkMasterConnection = async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/nodes/get-nodes-list`);
+      const response = await apiClient.get('/nodes/get-nodes-list', { retrySafe: true });
       const nodes = response.data;
       const masterNode = nodes.find(node => node.node_type === "master");
       if (masterNode) {
@@ -75,13 +73,14 @@ export default function JobsPage({ user }) {
 
   const fetchInitialData = async () => {
     if (!masterNodeConnected) return;
+    if (!userId) return;
 
     try {
       setIsLoading(true);
       const [jobsRes, nodesRes, groupsRes] = await Promise.all([
-        axios.get(`${API_BASE_URL}/jobs/slurm-jobs`),
-        axios.get(`${API_BASE_URL}/nodes/get-nodes-list`),
-        axios.get(`${API_BASE_URL}/users/users/${userId}/groups`),
+        apiClient.get('/jobs/slurm-jobs', { retrySafe: true }),
+        apiClient.get('/nodes/get-nodes-list', { retrySafe: true }),
+        apiClient.get(`/users/users/${userId}/groups`, { retrySafe: true }),
       ]);
 
       setJobs(jobsRes.data.jobs || []);
@@ -107,9 +106,9 @@ export default function JobsPage({ user }) {
   const fetchResourceLimits = async (context, id) => {
     try {
       const url = context === "user"
-        ? `${API_BASE_URL}/resources/resource-limits?user_id=${id}`
-        : `${API_BASE_URL}/resources/resource-limits?group_id=${id}`;
-      const limitsRes = await axios.get(url);
+        ? `/resources/resource-limits?user_id=${id}`
+        : `/resources/resource-limits?group_id=${id}`;
+      const limitsRes = await apiClient.get(url, { retrySafe: true });
       setResourceLimits({
         max_cpu: limitsRes.data.max_cpu || 0,
         max_gpu: limitsRes.data.max_gpu || 0,
@@ -124,7 +123,7 @@ export default function JobsPage({ user }) {
     if (!masterNodeConnected) return;
 
     try {
-      const jobsRes = await axios.get(`${API_BASE_URL}/jobs/slurm-jobs`);
+      const jobsRes = await apiClient.get('/jobs/slurm-jobs', { retrySafe: true });
       const newJobs = jobsRes.data.jobs || [];
 
       if (newJobs.length !== jobs.length) {
@@ -222,10 +221,11 @@ export default function JobsPage({ user }) {
         });
 
         // Call backend endpoint to upload file via SFTP
-        const uploadResponse = await axios.post(`${API_BASE_URL}/jobs/upload-ftp`, formData, {
+        const uploadResponse = await apiClient.post('/jobs/upload-ftp', formData, {
           headers: {
             'Content-Type': 'multipart/form-data',
           },
+          retrySafe: false,
         });
 
         downloadUrl = uploadResponse.data.download_url;
@@ -259,7 +259,7 @@ export default function JobsPage({ user }) {
       showLoading("Submitting Job...", "Please wait while Slurm schedules your job");
 
       // Route through backend proxy to slurm-master
-      await axios.post(`${API_BASE_URL}/jobs/submit-job`, payload);
+      await apiClient.post('/jobs/submit-job', payload, { retrySafe: false });
 
       Swal.close();
 
@@ -297,7 +297,7 @@ export default function JobsPage({ user }) {
       setIsLoading(true);
 
       // Use backend proxy to cancel job
-      const response = await axios.post(`${API_BASE_URL}/jobs/cancel-job`, { Job_id: jobId });
+      const response = await apiClient.post('/jobs/cancel-job', { Job_id: jobId }, { retrySafe: false });
 
       showAlert("success", "Job Canceled", response.data.message, () => {
         fetchInitialData();

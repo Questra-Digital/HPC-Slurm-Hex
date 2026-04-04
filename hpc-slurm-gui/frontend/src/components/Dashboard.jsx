@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import apiClient from '../api/client';
 import { 
   LayoutDashboard, 
   Clock, 
@@ -10,12 +10,11 @@ import {
   LogOut,
   HardDrive
 } from "lucide-react";
-import { API_BASE_URL } from "../config";
 import { MASTER_PORT } from "../config";
-export default function Dashboard({ setActiveMenuItem }) {
+export default function Dashboard({ setActiveMenuItem, authUser }) {
   const [jobs, setJobs] = useState([]);
-  const [username] = useState(sessionStorage.getItem("username") || "default_user_name");
-  const [userRole] = useState(sessionStorage.getItem("user_role") || "user");
+  const username = authUser?.username || "default_user_name";
+  const userRole = authUser?.role || "user";
   const [stats, setStats] = useState({
     total: 0,
     running: 0,
@@ -31,7 +30,7 @@ export default function Dashboard({ setActiveMenuItem }) {
 
   const fetchMasterNodeIp = async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/nodes/get-nodes-list`);
+      const response = await apiClient.get('/nodes/get-nodes-list', { retrySafe: true });
       const nodes = response.data;
       const masterNode = nodes.find(node => node.node_type === "master");
       if (masterNode) {
@@ -46,7 +45,11 @@ export default function Dashboard({ setActiveMenuItem }) {
     if (!masterNodeIp) return; // Wait until we have the master node IP
     
     try {
-      const response = await axios.get(`http://${masterNodeIp}:${MASTER_PORT}/jobs`);
+      const response = await apiClient.get(`http://${masterNodeIp}:${MASTER_PORT}/jobs`, {
+        authRequired: false,
+        skipAuthRefresh: true,
+        retrySafe: true,
+      });
       const allJobs = response.data.jobs || [];
       
       const filteredJobs = filterJobs(allJobs);

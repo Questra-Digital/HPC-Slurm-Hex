@@ -92,6 +92,12 @@ describe('Email Service Tests', () => {
         });
 
         test('should handle invalid email in sendWelcomeEmail', async () => {
+            const originalConfigured = emailService.isConfigured;
+            const originalTransporter = emailService.transporter;
+
+            emailService.isConfigured = true;
+            emailService.transporter = {};
+
             const result = await emailService.sendWelcomeEmail(
                 'invalid-email',
                 'testuser',
@@ -101,6 +107,9 @@ describe('Email Service Tests', () => {
 
             expect(result.success).toBe(false);
             expect(result.reason).toBe('invalid_email');
+
+            emailService.isConfigured = originalConfigured;
+            emailService.transporter = originalTransporter;
         });
     });
 

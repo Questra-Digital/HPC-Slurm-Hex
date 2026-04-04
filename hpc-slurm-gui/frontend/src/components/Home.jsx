@@ -8,15 +8,15 @@ import UserGroup from "./UserGroup";
 import ResourceAllocation from "./ResourceAllocation";
 import Settings from "./Settings";
 
-export default function Home({ user }) {
+export default function Home({ authUser, onLogout, onLogoutAll, onAuthUserUpdate, syncIssue }) {
     const [activeMenuItem, setActiveMenuItem] = useState("dashboard");
 
     const getContent = () => {
         switch (activeMenuItem) {
             case "dashboard":
-                return <Dashboard setActiveMenuItem={setActiveMenuItem} />;
+                return <Dashboard setActiveMenuItem={setActiveMenuItem} authUser={authUser} />;
             case "jobs":
-                return <Jobs />;
+                return <Jobs authUser={authUser} />;
             case "environment":
                 return <RemoteNodes />;
             case "users":
@@ -24,21 +24,24 @@ export default function Home({ user }) {
             case "resources":
                 return <ResourceAllocation />;
             case "settings":
-                return <Settings />;
+                return <Settings authUser={authUser} onAuthUserUpdate={onAuthUserUpdate} />;
             default:
-                return <Dashboard setActiveMenuItem={setActiveMenuItem} />;
+                return <Dashboard setActiveMenuItem={setActiveMenuItem} authUser={authUser} />;
         }
     };
 
     return (
         <div className="dashboard-container">
             <Sidebar 
-                user={user} 
+                authUser={authUser}
                 activeMenuItem={activeMenuItem} 
                 setActiveMenuItem={setActiveMenuItem} 
+                onLogout={onLogout}
+                onLogoutAll={onLogoutAll}
             />
             
             <div className="main-content">
+                {syncIssue ? <div className="sync-issue-banner">{syncIssue}</div> : null}
                 <div className="content-body">
                     {getContent()}
                 </div>
@@ -193,6 +196,16 @@ export default function Home({ user }) {
                     flex-direction: column;
                     background: #f3f4f6;
                     width: 100%;
+                }
+
+                .sync-issue-banner {
+                    margin: 1rem 1rem 0;
+                    padding: 0.75rem 1rem;
+                    border-radius: 8px;
+                    background: #fef3c7;
+                    color: #92400e;
+                    border: 1px solid #fcd34d;
+                    font-weight: 500;
                 }
                 
                 .content-body {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { API_BASE_URL } from "../config";
+import apiClient from "../api/client";
 
 export default function ResourceAllocation() {
   const [nodes, setNodes] = useState([]);
@@ -54,26 +54,19 @@ export default function ResourceAllocation() {
       setIsLoading(true);
       try {
         const [nodesRes, usersRes, groupsRes, slurmNodesRes] = await Promise.all([
-          fetch(`${API_BASE_URL}/nodes/get-nodes-list`),
-          fetch(`${API_BASE_URL}/users/users`),
-          fetch(`${API_BASE_URL}/users/groups`),
-          fetch(`${API_BASE_URL}/nodes/slurm-nodes`).catch(() => ({ ok: false })),
+          apiClient.get('/nodes/get-nodes-list', { retrySafe: true }),
+          apiClient.get('/users/users', { retrySafe: true }),
+          apiClient.get('/users/groups', { retrySafe: true }),
+          apiClient.get('/nodes/slurm-nodes', { retrySafe: true }).catch(() => null),
         ]);
 
-        if (!nodesRes.ok || !usersRes.ok || !groupsRes.ok) {
-          throw new Error("Failed to fetch data");
-        }
-
-        const [nodesData, usersData, groupsData] = await Promise.all([
-          nodesRes.json(),
-          usersRes.json(),
-          groupsRes.json(),
-        ]);
+        const nodesData = nodesRes.data || [];
+        const usersData = usersRes.data || [];
+        const groupsData = groupsRes.data || [];
 
         // Fetch Slurm nodes if available
-        if (slurmNodesRes.ok) {
-          const slurmData = await slurmNodesRes.json();
-          setSlurmNodes(slurmData.nodes || []);
+        if (slurmNodesRes?.data) {
+          setSlurmNodes(slurmNodesRes.data.nodes || []);
         }
 
         setNodes(nodesData);
@@ -111,11 +104,11 @@ export default function ResourceAllocation() {
     try {
       setSelectedNodes({});
       const param = entityType === "user" ? "user_id" : "group_id";
-      const response = await fetch(
-        `${API_BASE_URL}/resources/resource-limits?${param}=${entityId}`
+      const response = await apiClient.get(
+        `/resources/resource-limits?${param}=${entityId}`,
+        { retrySafe: true }
       );
-      if (!response.ok) throw new Error("Failed to fetch resource limits");
-      const data = await response.json();
+      const data = response.data || {};
       setResourceLimits({
         max_cpu: data.max_cpu || 0,
         max_gpu: data.max_gpu || 0,
@@ -170,16 +163,7 @@ export default function ResourceAllocation() {
         ...resourceLimits,
       };
 
-      const response = await fetch(`${API_BASE_URL}/resources/resource-limits`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to save resource limits");
-      }
+      await apiClient.post('/resources/resource-limits', payload, { retrySafe: false });
 
       setSaveStatus({
         message: "Resource limits saved successfully",

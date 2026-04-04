@@ -9,6 +9,8 @@ export default defineConfig({
     hmr: {
       //host: 'localhost', // <-- external IP your browser uses
       host: '59.103.246.24', // <-- external IP your browser uses
+      //clientPort: 5051,   // <-- browser-facing port for HMR websocket on windows development
+      clientPort: 80,   // <-- browser-facing port for HMR websocket
       protocol: 'ws',         // 'ws' for HTTP, 'wss' for HTTPS
     },
     watch: {

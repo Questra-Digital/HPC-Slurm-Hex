@@ -59,11 +59,16 @@ describe("AdminSetup Component", () => {
 
     await waitFor(() => {
       expect(axios.post).toHaveBeenCalledWith(
-        expect.stringContaining("/auth/setup-admin"),
+        "/auth/setup-admin",
         {
           username: "admin",
           email: "admin@example.com",
           password: "securePassword123",
+        },
+        {
+          authRequired: false,
+          skipAuthRefresh: true,
+          retrySafe: false,
         }
       );
       expect(mockNavigate).toHaveBeenCalledWith("/login");

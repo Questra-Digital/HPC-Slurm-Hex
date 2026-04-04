@@ -1,0 +1,24 @@
+# Dependency directories
+**/node_modules/
+
+# Python cache and virtual envs
+**/__pycache__/
+**/.pytest_cache/
+**/.mypy_cache/
+.venv/
+venv/
+
+# Build artifacts
+**/dist/
+**/build/
+
+# Logs
+**/npm-debug.log*
+**/yarn-debug.log*
+**/yarn-error.log*
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.vscode/
+.vagrant/

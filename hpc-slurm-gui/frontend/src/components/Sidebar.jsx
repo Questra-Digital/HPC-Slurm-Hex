@@ -1,5 +1,4 @@
 import { useNavigate } from "react-router-dom";
-import { useState, useEffect } from "react";
 import { 
   LayoutDashboard, 
   Clock, 
@@ -10,24 +9,30 @@ import {
   LogOut,
   HardDrive
 } from "lucide-react";
-import { API_BASE_URL } from "../config";
 
-export default function Sidebar({ user, activeMenuItem, setActiveMenuItem }) {
-    const [userRole, setUserRole] = useState(sessionStorage.getItem("user_role") || "user");
-    // NEW: State for permissions
-    const [permissions, setPermissions] = useState(JSON.parse(sessionStorage.getItem("permissions") || "[]"));
+export default function Sidebar({ authUser, activeMenuItem, setActiveMenuItem, onLogout, onLogoutAll }) {
+    const userRole = authUser?.role || "user";
+    const permissions = authUser?.permissions || [];
+    const userName = authUser?.username || "User";
     const navigate = useNavigate();
 
-    useEffect(() => {
-        const role = sessionStorage.getItem("user_role") || "user";
-        const storedPermissions = JSON.parse(sessionStorage.getItem("permissions") || "[]");
-        setUserRole(role);
-        setPermissions(storedPermissions);
-    }, []);
-
     const handleLogout = () => {
-        sessionStorage.clear();
+        if (onLogout) {
+            onLogout();
+        }
         navigate("/login");
+    };
+
+    const handleLogoutAll = () => {
+        if (onLogoutAll) {
+            onLogoutAll();
+        }
+        navigate("/login");
+    };
+
+    const handleMenuClick = (event, menuKey) => {
+        event.preventDefault();
+        setActiveMenuItem(menuKey);
     };
 
     return (
@@ -38,10 +43,10 @@ export default function Sidebar({ user, activeMenuItem, setActiveMenuItem }) {
             
             <div className="sidebar-user">
                 <div className="user-avatar">
-                    {user.charAt(0).toUpperCase()}
+                    {userName.charAt(0).toUpperCase()}
                 </div>
                 <div className="user-info">
-                    <span className="user-name">{user}</span>
+                    <span className="user-name">{userName}</span>
                     <span className="user-role">{userRole}</span>
                 </div>
             </div>
@@ -51,7 +56,7 @@ export default function Sidebar({ user, activeMenuItem, setActiveMenuItem }) {
                     {/* NEW: Conditionally render based on permissions */}
                     {permissions.includes("dashboard") && (
                         <li className={activeMenuItem === "dashboard" ? "active" : ""}>
-                            <a href="#" onClick={() => setActiveMenuItem("dashboard")}>
+                            <a href="#" onClick={(event) => handleMenuClick(event, "dashboard")}>
                                 <LayoutDashboard size={18} className="icon" />
                                 Dashboard
                             </a>
@@ -60,7 +65,7 @@ export default function Sidebar({ user, activeMenuItem, setActiveMenuItem }) {
 
                     {permissions.includes("jobs") && (
                         <li className={activeMenuItem === "jobs" ? "active" : ""}>
-                            <a href="#" onClick={() => setActiveMenuItem("jobs")}>
+                            <a href="#" onClick={(event) => handleMenuClick(event, "jobs")}>
                                 <Clock size={18} className="icon" />
                                 Jobs Management
                             </a>
@@ -69,7 +74,7 @@ export default function Sidebar({ user, activeMenuItem, setActiveMenuItem }) {
                     
                     {permissions.includes("users") && (
                         <li className={activeMenuItem === "users" ? "active" : ""}>
-                            <a href="#" onClick={() => setActiveMenuItem("users")}>
+                            <a href="#" onClick={(event) => handleMenuClick(event, "users")}>
                                 <Users size={18} className="icon" />
                                 Users/Groups
                             </a>
@@ -78,7 +83,7 @@ export default function Sidebar({ user, activeMenuItem, setActiveMenuItem }) {
 
                     {permissions.includes("resources") && (
                         <li className={activeMenuItem === "resources" ? "active" : ""}>
-                            <a href="#" onClick={() => setActiveMenuItem("resources")}>
+                            <a href="#" onClick={(event) => handleMenuClick(event, "resources")}>
                                 <BarChart3 size={18} className="icon" />
                                 Resource Allocation
                             </a>
@@ -89,7 +94,7 @@ export default function Sidebar({ user, activeMenuItem, setActiveMenuItem }) {
 
                     {permissions.includes("environment") && (
                         <li className={activeMenuItem === "environment" ? "active" : ""}>
-                            <a href="#" onClick={() => setActiveMenuItem("environment")}>
+                            <a href="#" onClick={(event) => handleMenuClick(event, "environment")}>
                                 <HardDrive size={18} className="icon" />
                                 Environment
                             </a>
@@ -98,7 +103,7 @@ export default function Sidebar({ user, activeMenuItem, setActiveMenuItem }) {
 
                     {permissions.includes("settings") && (
                         <li className={activeMenuItem === "settings" ? "active" : ""}>
-                            <a href="#" onClick={() => setActiveMenuItem("settings")}>
+                            <a href="#" onClick={(event) => handleMenuClick(event, "settings")}>
                                 <Settings size={18} className="icon" />
                                 Settings
                             </a>
@@ -111,6 +116,10 @@ export default function Sidebar({ user, activeMenuItem, setActiveMenuItem }) {
                 <button onClick={handleLogout} className="logout-button">
                     <LogOut size={18} className="icon" />
                     Logout
+                </button>
+                <button onClick={handleLogoutAll} className="logout-button logout-all-button" style={{ marginTop: "0.5rem" }}>
+                    <LogOut size={18} className="icon" />
+                    Logout All Devices
                 </button>
             </div>
         </div>

@@ -1,8 +1,7 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
-import { API_BASE_URL } from "../config";
+import apiClient from "../api/client";
 
-export default function Settings() {
+export default function Settings({ authUser, onAuthUserUpdate }) {
     const [profile, setProfile] = useState({
         id: "",
         username: "",
@@ -36,9 +35,10 @@ export default function Settings() {
     const [selectedGroupId, setSelectedGroupId] = useState("");
 
     useEffect(() => {
-        const userId = sessionStorage.getItem('id');
-        const username = sessionStorage.getItem('username');
-        const role = sessionStorage.getItem('user_role');
+        const userId = authUser?.id;
+        const username = authUser?.username;
+        const role = authUser?.role;
+        const email = authUser?.email;
 
         if (!userId) {
             setNotifications({
@@ -58,17 +58,18 @@ export default function Settings() {
 
         setFormData(prev => ({
             ...prev,
-            username: username || ""
+            username: username || "",
+            email: email || ""
         }));
 
         fetchUserData(userId);
         fetchUserGroups(userId);
         fetchResourceLimits("user", userId);
-    }, []);
+    }, [authUser]);
 
     const fetchUserData = async (userId) => {
         try {
-            const response = await axios.get(`${API_BASE_URL}/users/users`);
+            const response = await apiClient.get('/users/users', { retrySafe: true });
             const numericUserId = Number(userId);
             const userData = response.data.find(user => user.id === numericUserId) || response.data[0];
             
@@ -99,7 +100,7 @@ export default function Settings() {
 
     const fetchUserGroups = async (userId) => {
         try {
-            const response = await axios.get(`${API_BASE_URL}/users/users/${userId}/groups`);
+            const response = await apiClient.get(`/users/users/${userId}/groups`, { retrySafe: true });
             setUserGroups(response.data || []);
         } catch (err) {
             console.error("Failed to fetch user groups:", err);
@@ -109,9 +110,9 @@ export default function Settings() {
     const fetchResourceLimits = async (context, id) => {
         try {
             const url = context === "user"
-                ? `${API_BASE_URL}/resources/resource-limits?user_id=${id}`
-                : `${API_BASE_URL}/resources/resource-limits?group_id=${id}`;
-            const response = await axios.get(url);
+                ? `/resources/resource-limits?user_id=${id}`
+                : `/resources/resource-limits?group_id=${id}`;
+            const response = await apiClient.get(url, { retrySafe: true });
             setResourceLimits({
                 max_cpu: response.data.max_cpu || 0,
                 max_gpu: response.data.max_gpu || 0,
@@ -139,12 +140,18 @@ export default function Settings() {
         clearNotifications();
         
         try {
-            await axios.put(`${API_BASE_URL}/users/users/${profile.id}`, {
+            await apiClient.put(`/users/users/${profile.id}`, {
                 username: formData.username,
                 email: formData.email
-            });
-            
-            sessionStorage.setItem('username', formData.username);
+            }, { retrySafe: false });
+
+            if (onAuthUserUpdate) {
+                onAuthUserUpdate((prev) => ({
+                    ...prev,
+                    username: formData.username,
+                    email: formData.email
+                }));
+            }
 
             setNotifications({
                 ...notifications,
@@ -193,9 +200,9 @@ export default function Settings() {
         }
         
         try {
-            await axios.put(`${API_BASE_URL}/users/users/${profile.id}`, {
+            await apiClient.put(`/users/users/${profile.id}`, {
                 password: formData.newPassword
-            });
+            }, { retrySafe: false });
             
             setNotifications({
                 ...notifications,

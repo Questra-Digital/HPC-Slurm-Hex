@@ -1,6 +1,9 @@
 const express = require("express");
 const emailService = require("../services/emailService");
+const { requireRole } = require("../middleware/auth");
 const router = express.Router();
+
+router.use(requireRole("admin"));
 
 /**
  * Send test email to verify email configuration

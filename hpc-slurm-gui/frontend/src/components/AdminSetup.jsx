@@ -1,8 +1,7 @@
 import React from "react";
 import { useState } from "react";
-import axios from "axios";
 import { useNavigate } from "react-router-dom";
-import { API_BASE_URL } from "../config";
+import apiClient from "../api/client";
 export default function AdminSetup() {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
@@ -13,9 +12,12 @@ export default function AdminSetup() {
     const handleSetup = async (e) => {
         e.preventDefault();
         try {
-            await axios.post(`${API_BASE_URL}/auth/setup-admin`, { username: "admin", email, password });
+            await apiClient.post("/auth/setup-admin", { username: "admin", email, password }, {
+                authRequired: false,
+                skipAuthRefresh: true,
+                retrySafe: false,
+            });
             navigate("/login");
-            window.location.href = "/login";
         } catch (error) {
             setError(error.response?.data?.message || "An error occurred.");
         }

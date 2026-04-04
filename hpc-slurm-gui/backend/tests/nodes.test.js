@@ -6,12 +6,26 @@ const axios = require('axios');
 
 jest.mock('axios'); 
 
-const app = express();
-app.use(express.json());
-app.use('/nodes', nodesRoutes);
+const buildApp = (auth = null) => {
+    const app = express();
+    app.use(express.json());
+
+    if (auth) {
+        app.use((req, res, next) => {
+            req.auth = auth;
+            next();
+        });
+    }
+
+    app.use('/nodes', nodesRoutes);
+    return app;
+};
 
 describe('Nodes Routes', () => {
+    const adminAuth = { userId: 1, role: 'admin' };
+
     it('POST /connect creates a new node', async () => {
+        const app = buildApp(adminAuth);
         axios.get.mockResolvedValue({
             status: 200,
             data: { status: 'active', cpu_count: 4, gpu_count: 1, total_memory_gb: 16 }
@@ -25,6 +39,7 @@ describe('Nodes Routes', () => {
     });
 
     it('POST /reset-nodes clears the node table', async () => {
+        const app = buildApp(adminAuth);
         await Node.create({ name: 'node1', ip_address: '192.168.1.1', node_type: 'master' });
         const res = await request(app).post('/nodes/reset-nodes');
         expect(res.status).toBe(200);
@@ -33,10 +48,17 @@ describe('Nodes Routes', () => {
     });
 
     it('GET /get-nodes-list returns all nodes', async () => {
+        const app = buildApp(adminAuth);
         await Node.create({ name: 'node1', ip_address: '192.168.1.1', node_type: 'master' });
         const res = await request(app).get('/nodes/get-nodes-list');
         expect(res.status).toBe(200);
         expect(res.body.length).toBe(1);
         expect(res.body[0].name).toBe('node1');
+    });
+
+    it('GET /get-nodes-list blocks unauthenticated requests', async () => {
+        const app = buildApp();
+        const res = await request(app).get('/nodes/get-nodes-list');
+        expect(res.status).toBe(401);
     });
 });
