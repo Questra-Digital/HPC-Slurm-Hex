@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import apiClient from "../api/client";               // ← HIS
 import { API_BASE_URL } from "../config";            // ← YOURS
-import axios from "axios";                           // ← YOURS
+//import axios from "axios";                           // ← YOURS
 
 import { Line } from 'react-chartjs-2';              // ← YOURS
 import {
@@ -91,34 +91,35 @@ export default function ResourceAllocation() {
   };
 
   // ================= METRICS FETCH (YOURS - REAL-TIME) =================
-  useEffect(() => {
-    let interval;
+// ================= METRICS FETCH - FIXED AFTER MERGE =================
+useEffect(() => {
+  let interval;
 
-    const fetchMetrics = async () => {
-      try {
-        const [cpuRes, memRes, gpuRes] = await Promise.all([
-          axios.get(`${API_BASE_URL}/resources/metrics?type=cpu&range=${timeRange}&step=${refreshRate}s${selectedNodeIp ? `&nodeIp=${selectedNodeIp}` : ''}`),
-          axios.get(`${API_BASE_URL}/resources/metrics?type=memory&range=${timeRange}&step=${refreshRate}s${selectedNodeIp ? `&nodeIp=${selectedNodeIp}` : ''}`),
-          axios.get(`${API_BASE_URL}/resources/metrics?type=gpu&range=${timeRange}&step=${refreshRate}s${selectedNodeIp ? `&nodeIp=${selectedNodeIp}` : ''}`)
-        ]);
+  const fetchMetrics = async () => {
+    try {
+      const [cpuRes, memRes, gpuRes] = await Promise.all([
+        apiClient.get(`/resources/metrics?type=cpu&range=${timeRange}&step=${refreshRate}s${selectedNodeIp ? `&nodeIp=${selectedNodeIp}` : ''}`),
+        apiClient.get(`/resources/metrics?type=memory&range=${timeRange}&step=${refreshRate}s${selectedNodeIp ? `&nodeIp=${selectedNodeIp}` : ''}`),
+        apiClient.get(`/resources/metrics?type=gpu&range=${timeRange}&step=${refreshRate}s${selectedNodeIp ? `&nodeIp=${selectedNodeIp}` : ''}`)
+      ]);
 
-        setMetricsData({
-          cpu: processMetrics(cpuRes.data),
-          memory: processMetrics(memRes.data),
-          gpu: processMetrics(gpuRes.data)
-        });
+      setMetricsData({
+        cpu: processMetrics(cpuRes.data),
+        memory: processMetrics(memRes.data),
+        gpu: processMetrics(gpuRes.data)
+      });
 
-        console.log("FETCHED at:", new Date().toLocaleTimeString());
-      } catch (error) {
-        console.error("Metrics fetch error:", error);
-      }
-    };
+      console.log(`✅ METRICS FETCHED at ${new Date().toLocaleTimeString()} | Refresh: ${refreshRate}s`);
+    } catch (error) {
+      console.error("Metrics fetch error:", error);
+    }
+  };
 
-    fetchMetrics();
-    interval = setInterval(fetchMetrics, refreshRate * 1000);
+  fetchMetrics();                    // initial fetch
+  interval = setInterval(fetchMetrics, refreshRate * 1000);
 
-    return () => clearInterval(interval);
-  }, [timeRange, selectedNodeIp, refreshRate]);
+  return () => clearInterval(interval);
+}, [timeRange, selectedNodeIp, refreshRate]);
 
   // ================= PERSIST SETTINGS =================
   useEffect(() => {
