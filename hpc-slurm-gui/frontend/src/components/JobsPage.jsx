@@ -25,6 +25,8 @@ export default function JobsPage({ user }) {
   const [nextJobId, setNextJobId] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false); // Separate state for submit button
+  const [exportDuration, setExportDuration] = useState("all");
+  const [isExporting, setIsExporting] = useState(false);
   const [resourceLimits, setResourceLimits] = useState({
     max_cpu: 0,
     max_gpu: 0,
@@ -178,6 +180,38 @@ export default function JobsPage({ user }) {
     }
 
     return true;
+  };
+
+  // ── CSV Export Handler (Admin only) ──────────────────────────────
+  const handleExportCsv = async () => {
+    setIsExporting(true);
+    try {
+      const token = sessionStorage.getItem("token");
+      const response = await axios.get(
+        `${API_BASE_URL}/jobs/export-csv?duration=${exportDuration}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          responseType: "blob",
+        }
+      );
+
+      // Trigger browser download
+      const blob = new Blob([response.data], { type: "text/csv" });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `job_history_${exportDuration}_${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+
+      showAlert("success", "Export Complete", "Job history CSV downloaded successfully.");
+    } catch (error) {
+      showAlert("error", "Export Failed", error.response?.data?.error || error.message || "Failed to export CSV.");
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const handleSubmitJob = async () => {
@@ -589,7 +623,31 @@ export default function JobsPage({ user }) {
           </div>
 
           <div className="section jobs-list-section">
-            <h2>Jobs Status</h2>
+            <div className="jobs-header">
+              <h2>Jobs Status</h2>
+              {userRole === "admin" && (
+                <div className="export-controls">
+                  <select
+                    className="export-select"
+                    value={exportDuration}
+                    onChange={(e) => setExportDuration(e.target.value)}
+                  >
+                    <option value="24h">Last 24 Hours</option>
+                    <option value="7d">Last 7 Days</option>
+                    <option value="30d">Last 30 Days</option>
+                    <option value="90d">Last 90 Days</option>
+                    <option value="all">All Time</option>
+                  </select>
+                  <button
+                    className="export-btn"
+                    onClick={handleExportCsv}
+                    disabled={isExporting}
+                  >
+                    {isExporting ? "Exporting..." : "📥 Export CSV"}
+                  </button>
+                </div>
+              )}
+            </div>
             <div className="tabs-container">
               <div className={getTabClass(0)} onClick={() => setSelectedTab(0)}>RUNNING</div>
               <div className={getTabClass(1)} onClick={() => setSelectedTab(1)}>COMPLETED</div>
@@ -945,6 +1003,51 @@ export default function JobsPage({ user }) {
           font-style: italic;
         }
         
+        .jobs-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          flex-wrap: wrap;
+          gap: 10px;
+        }
+
+        .export-controls {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .export-select {
+          padding: 6px 10px;
+          border: 1px solid #e2e8f0;
+          border-radius: 6px;
+          font-size: 13px;
+          color: #334155;
+          background: #fff;
+          cursor: pointer;
+        }
+
+        .export-btn {
+          padding: 6px 14px;
+          background: #1e3a8a;
+          color: #fff;
+          border: none;
+          border-radius: 6px;
+          font-size: 13px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: background 0.2s;
+        }
+
+        .export-btn:hover {
+          background: #1e40af;
+        }
+
+        .export-btn:disabled {
+          background: #94a3b8;
+          cursor: not-allowed;
+        }
+
         @media (max-width: 1024px) {
           .content-container {
             flex-direction: column;
@@ -961,6 +1064,10 @@ export default function JobsPage({ user }) {
           }
           .jobs-list-section {
             min-width: 100%;
+          }
+          .jobs-header {
+            flex-direction: column;
+            align-items: flex-start;
           }
         }
       `}</style>

@@ -112,7 +112,8 @@ const fetchAndCacheJobs = async () => {
         if (fields.length >= 12) {
           if (!fields[1].includes('.batch')) {
 
-            const nodeName = fields[11] || null;
+            const rawNode = fields[11] || null;
+            const nodeName = (rawNode && rawNode !== 'None assigned' && rawNode !== 'None' && rawNode.trim() !== '') ? rawNode : null;
             const nodeIP = nodeName ? getNodeIP(nodeName) : '127.0.0.1';
 
             if (currentJob) jobs.push(currentJob);

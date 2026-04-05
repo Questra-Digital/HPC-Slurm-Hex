@@ -313,5 +313,111 @@ router.get("/download/:nodeIp/:filename", async (req, res) => {
   }
 });
 
+// ============================================
+// CSV Export — Admin only
+// ============================================
+
+// Helper: Convert jobs array to CSV string
+function jobsToCsv(jobs) {
+  const headers = [
+    "Job ID", "Job Name", "User", "Partition", "Node",
+    "Start", "End", "State", "Exit Code",
+    "CPUs", "GPUs", "Memory (GB)"
+  ];
+
+  const escapeField = (val) => {
+    const str = val == null ? "" : String(val);
+    // Wrap in quotes if it contains comma, quote, or newline
+    if (str.includes(",") || str.includes('"') || str.includes("\n")) {
+      return `"${str.replace(/"/g, '""')}"`;
+    }
+    return str;
+  };
+
+  const rows = jobs.map(job => [
+    job.jobId,
+    job.jobName,
+    job.userName || "",
+    job.partition || "",
+    job.node || "",
+    job.start || "",
+    job.end || "",
+    job.state || "",
+    job.exitCode || "",
+    job.cpu_request || 0,
+    job.gpu_request || 0,
+    job.memory_request || 0,
+  ].map(escapeField).join(","));
+
+  return [headers.join(","), ...rows].join("\n");
+}
+
+// GET /api/jobs/export-csv?duration=7d|30d|90d|all
+router.get("/export-csv", async (req, res) => {
+  try {
+    // Verify admin role from JWT
+    const authHeader = req.headers.authorization;
+    if (!authHeader) {
+      return res.status(401).json({ error: "Authorization required" });
+    }
+
+    const jwt = require("jsonwebtoken");
+    const token = authHeader.replace("Bearer ", "");
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET);
+    } catch (e) {
+      return res.status(401).json({ error: "Invalid or expired token" });
+    }
+
+    if (decoded.role !== "admin") {
+      return res.status(403).json({ error: "Admin access required" });
+    }
+
+    // Fetch jobs from master
+    const masterIp = await getMasterNodeIp();
+    if (!masterIp) {
+      return res.status(400).json({ error: "Master node not configured" });
+    }
+
+    const response = await axios.get(`http://${masterIp}:${SLURM_PORT}/jobs`, { timeout: 15000 });
+    let jobs = response.data.jobs || [];
+
+    // Filter by duration
+    const duration = req.query.duration || "all";
+    if (duration !== "all") {
+      const now = new Date();
+      let cutoff;
+
+      switch (duration) {
+        case "24h": cutoff = new Date(now - 24 * 60 * 60 * 1000); break;
+        case "7d":  cutoff = new Date(now - 7 * 24 * 60 * 60 * 1000); break;
+        case "30d": cutoff = new Date(now - 30 * 24 * 60 * 60 * 1000); break;
+        case "90d": cutoff = new Date(now - 90 * 24 * 60 * 60 * 1000); break;
+        default:    cutoff = null;
+      }
+
+      if (cutoff) {
+        jobs = jobs.filter(job => {
+          if (!job.start) return false;
+          const jobDate = new Date(job.start);
+          return jobDate >= cutoff;
+        });
+      }
+    }
+
+    // Generate CSV
+    const csv = jobsToCsv(jobs);
+    const filename = `job_history_${duration}_${new Date().toISOString().slice(0, 10)}.csv`;
+
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.send(csv);
+  } catch (error) {
+    console.error("CSV export error:", error.message);
+    res.status(500).json({ error: "Failed to export job history", message: error.message });
+  }
+});
+
 module.exports = router;
 
