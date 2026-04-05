@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { API_BASE_URL } from "../config";
 import axios from "axios";  // ← ADD THIS LINE
 
@@ -33,8 +33,23 @@ export default function ResourceAllocation() {
   const [isLoading, setIsLoading] = useState(true);
   const [saveStatus, setSaveStatus] = useState({ message: "", type: "" });
   const [selectedNodeIp, setSelectedNodeIp] = useState("");
-  const [timeRange, setTimeRange] = useState('5m');
-  const [refreshRate, setRefreshRate] = useState(15);   // default 15 seconds
+
+  const [timeRange, setTimeRange] = useState(() => {
+    return localStorage.getItem('timeRange') || '5m';
+  });
+
+  const [refreshRate, setRefreshRate] = useState(() => {
+    return Number(localStorage.getItem('refreshRate')) || 10;
+  });
+
+  const cpuChartRef = useRef(null);
+  const memoryChartRef = useRef(null);
+  const gpuChartRef = useRef(null);
+
+
+  // commented these 2 lines as they were cauing the states to come back to default after unmounting (when leaving their tab or exploring other tabs)
+  // const [timeRange, setTimeRange] = useState('5m');
+  // const [refreshRate, setRefreshRate] = useState(15);   // default 15 seconds
 
   const calculateClusterTotals = () => {
     // Use Slurm nodes if available, otherwise fall back to database nodes
@@ -69,29 +84,87 @@ export default function ResourceAllocation() {
 const [metricsData, setMetricsData] = useState({ cpu: [], memory: [], gpu: [] });  // Time-series
 
 useEffect(() => {
+
+  let interval;
+
   const fetchMetrics = async () => {
     try {
+      // const base = `${API_BASE_URL}/resources/metrics?range=${timeRange}&step=${refreshRate}s${selectedNodeIp ? `&nodeIp=${selectedNodeIp}` : ''}`;
       const [cpuRes, memRes, gpuRes] = await Promise.all([
         axios.get(`${API_BASE_URL}/resources/metrics?type=cpu&range=${timeRange}&step=${refreshRate}s${selectedNodeIp ? `&nodeIp=${selectedNodeIp}` : ''}`),
         axios.get(`${API_BASE_URL}/resources/metrics?type=memory&range=${timeRange}&step=${refreshRate}s${selectedNodeIp ? `&nodeIp=${selectedNodeIp}` : ''}`),
         axios.get(`${API_BASE_URL}/resources/metrics?type=gpu&range=${timeRange}&step=${refreshRate}s${selectedNodeIp ? `&nodeIp=${selectedNodeIp}` : ''}`)
+        // axios.get(`${base}&type=cpu`)
+        // axios.get(`${base}&type=memory`)
+        // axios.get(`${base}&type=gpu`)
       ]);
+
       setMetricsData({
-        cpu: processMetrics(cpuRes.data),  // Helper to format {labels: timestamps, datasets: [{data: values}]}
+        cpu: processMetrics(cpuRes.data),
         memory: processMetrics(memRes.data),
         gpu: processMetrics(gpuRes.data)
       });
+      
+        // ✅ DEBUG TIMESTAMP
+      console.log("FETCHED at:", new Date().toLocaleTimeString());
+      
+        console.log(`✅ FETCHED at ${new Date().toLocaleTimeString()} | Refresh: ${refreshRate}s`);
     } catch (error) {
       console.error("Metrics fetch error:", error);
     }
   };
-  fetchMetrics();
-// Dynamic refresh rate
-  const interval = setInterval(fetchMetrics, refreshRate * 1000);
+
+  console.log("metricsData shape:", metricsData);
+ fetchMetrics();
+
+console.log("REFRESH RATE USED:", refreshRate);
+
+interval = setInterval(fetchMetrics, refreshRate * 1000);
+
 
   return () => clearInterval(interval);
 }, [timeRange, selectedNodeIp, refreshRate]);   // ← refreshRate added here
 
+// these 2 below let the time-range and refresh-rate as same as we'll select in the UI
+
+// Persist time range
+useEffect(() => {
+  localStorage.setItem('timeRange', timeRange);
+}, [timeRange]);
+
+// Persist refresh rate
+useEffect(() => {
+  localStorage.setItem('refreshRate', refreshRate);
+}, [refreshRate]);
+
+
+// useEffect(() => {
+//   const fetchMetrics = async () => {
+//     try {
+//       const baseUrl = `${API_BASE_URL}/resources/metrics?range=${timeRange}&step=${refreshRate}s`;
+//       const nodeParam = selectedNodeIp ? `&nodeIp=${selectedNodeIp}` : '';
+
+//       const [cpuRes, memRes, gpuRes] = await Promise.all([
+//         axios.get(`${baseUrl}&type=cpu${nodeParam}`),
+//         axios.get(`${baseUrl}&type=memory${nodeParam}`),
+//         axios.get(`${baseUrl}&type=gpu${nodeParam}`)
+//       ]);
+
+//       setMetricsData({
+//         cpu: processMetrics(cpuRes.data),
+//         memory: processMetrics(memRes.data),
+//         gpu: processMetrics(gpuRes.data)
+//       });
+//     } catch (error) {
+//       console.error("Metrics fetch error:", error);
+//     }
+//   };
+
+//   fetchMetrics();                    // Initial fetch
+//   const interval = setInterval(fetchMetrics, refreshRate * 1000);
+
+//   return () => clearInterval(interval);
+// }, [timeRange, selectedNodeIp, refreshRate]);
 
 
 
@@ -238,10 +311,10 @@ const processMetrics = (data) => {
   const max = rawValues.length ? Math.max(...rawValues) : 0;
 
   return {
-    labels,
+    labels: [...labels],                    // new array
     datasets: [{
       label: 'Utilization %',
-      data: rawValues,
+      data: [...rawValues],                 // new array
       borderColor: '#10b981',
       backgroundColor: 'rgba(16, 185, 129, 0.1)',
       tension: 0.3,
@@ -363,6 +436,7 @@ const processMetrics = (data) => {
 const chartOptions = {
   responsive: true,
   maintainAspectRatio: false,
+  animation: false, // to avoide delay illusion
   plugins: {
     legend: { display: false },
     tooltip: {
@@ -602,7 +676,7 @@ const chartOptions = {
 
   <div className="controls-row">
     {/* Time Range */}
-    <div className="time-range">
+    {/* <div className="time-range">
       {['10s', '30s', '1m', '5m', '15m', '1h', '6h', '24h'].map((range) => (
         <button
           key={range}
@@ -612,10 +686,10 @@ const chartOptions = {
           {range}
         </button>
       ))}
-    </div>
+    </div> */}
 
     {/* Refresh Rate Selector */}
-    <div className="refresh-selector">
+    {/* <div className="refresh-selector">
       <select 
         value={refreshRate} 
         onChange={(e) => setRefreshRate(Number(e.target.value))}
@@ -627,10 +701,10 @@ const chartOptions = {
         <option value={30}>Refresh: 30s</option>
         <option value={60}>Refresh: 60s</option>
       </select>
-    </div>
+    </div> */}
 
     {/* Node Selector (already there) */}
-    <div className="node-selector">
+    {/* <div className="node-selector">
       <select
         value={selectedNodeIp}
         onChange={(e) => setSelectedNodeIp(e.target.value)}
@@ -643,7 +717,8 @@ const chartOptions = {
           </option>
         ))}
       </select>
-    </div>
+    </div> */}
+
   </div>
 </div>
 
@@ -662,7 +737,15 @@ const chartOptions = {
       </div>
       <div className="chart-wrapper">
         {metricsData.cpu?.labels?.length > 0 ? (
-          <Line data={metricsData.cpu} options={chartOptions} />
+          // <Line data={metricsData.cpu} options={chartOptions} />
+<Line 
+  ref={cpuChartRef}
+  // key={`cpu-${refreshRate}-${timeRange}-${Date.now()}`}   // Strong key
+  // key={`cpu-chart-${Date.now()}`}
+  data={metricsData.cpu} 
+  options={chartOptions}
+  redraw={true}           // ← This is the most important
+/>
         ) : (
           <div className="empty-chart">Waiting for CPU data...</div>
         )}
@@ -683,7 +766,15 @@ const chartOptions = {
       </div>
       <div className="chart-wrapper">
         {metricsData.memory?.labels?.length > 0 ? (
-          <Line data={metricsData.memory} options={chartOptions} />
+          // <Line data={metricsData.memory} options={chartOptions} />
+<Line 
+  ref={memoryChartRef}
+  // key={`cpu-chart-${Date.now()}`}
+  // key={`memory-${refreshRate}-${timeRange}-${Date.now()}`}
+  data={metricsData.memory} 
+  options={chartOptions}
+  redraw={true}
+/>
         ) : (
           <div className="empty-chart">Waiting for Memory data...</div>
         )}
@@ -704,7 +795,15 @@ const chartOptions = {
       </div>
       <div className="chart-wrapper">
         {metricsData.gpu?.labels?.length > 0 ? (
-          <Line data={metricsData.gpu} options={chartOptions} />
+<Line 
+  ref={gpuChartRef}
+  // key={`cpu-chart-${Date.now()}`}
+  // key={`gpu-${refreshRate}-${timeRange}-${Date.now()}`}
+  data={metricsData.gpu} 
+  options={chartOptions}
+  redraw={true}
+/>
+          // <Line data={metricsData.gpu} options={chartOptions} />
         ) : (
           <div className="empty-chart">No GPU detected</div>
         )}

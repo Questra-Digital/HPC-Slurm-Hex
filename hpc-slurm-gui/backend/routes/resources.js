@@ -7,7 +7,7 @@ router.get("/resource-limits", async (req, res) => {
     try {
         const { user_id, group_id } = req.query;
         let whereClause = {};
-        
+
         if (user_id) whereClause.user_id = user_id;
         if (group_id) whereClause.group_id = group_id;
 
@@ -93,6 +93,7 @@ router.delete("/resource-limits", async (req, res) => {
 // for testing purposes only
 
 // Temporary mock for local testing - comment out real endpoint above
+
 // router.get("/metrics", async (req, res) => {
 //   const { type = 'cluster', range = '5m', step = '15s' } = req.query;  // Keep params for realism
 
@@ -121,17 +122,15 @@ router.delete("/resource-limits", async (req, res) => {
 
 
 
-
-
-// // Real-time metrics endpoint (cluster/node/job utilization)
+// Real-time metrics endpoint (cluster/node/job utilization)
 router.get("/metrics", async (req, res) => {
   try {
     const { type = 'cluster', nodeIp, jobId, range = '5m', step = '15s' } = req.query;  // Params: type (cluster/node/job), optional nodeIp/jobId
     let query;
 
     switch (type) {
-      case 'cpu':  // Cluster CPU % over time
-        query = `rate(node_cpu_seconds_total{mode!="idle"}[${range}]) * 100`;
+      case 'cpu':
+        query = `100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[2m])) * 100)`;
         break;
       case 'memory':  // Memory used %
         query = `(node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes * 100`;
@@ -148,8 +147,13 @@ router.get("/metrics", async (req, res) => {
         throw new Error('Invalid metric type');
     }
 
-    // If node-specific, add instance filter
-    if (nodeIp) query += `{instance="${nodeIp}:9100"}`;
+    if (nodeIp) {
+  query = query.replace(
+    '{',
+    `{instance="${nodeIp}:9100",`
+  );
+}
+
 
     const promUrl = `${process.env.PROMETHEUS_URL}/api/v1/query_range?query=${encodeURIComponent(query)}&start=${Date.now()/1000 - 300}&end=${Date.now()/1000}&step=${step}`;
     
