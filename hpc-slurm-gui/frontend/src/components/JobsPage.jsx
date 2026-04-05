@@ -236,7 +236,46 @@ export default function JobsPage({ user }) {
         Swal.close();
       } catch (error) {
         Swal.close();
-        showAlert("error", "File Upload Failed", error.response?.data?.message || error.message || "Failed to upload file.");
+        // Check if this is a security scan failure
+        if (error.response?.data?.scanFailed) {
+          const threats = error.response.data.threats || [];
+          const filesScanned = error.response.data.filesScanned || 0;
+          
+          // Build HTML table for threat report
+          let threatHtml = `<div style="text-align:left;max-height:350px;overflow-y:auto;font-size:13px;">`;
+          threatHtml += `<p style="margin-bottom:10px;color:#475569;">Scanned <strong>${filesScanned}</strong> file(s). Found <strong style="color:#b91c1c;">${threats.length}</strong> threat(s):</p>`;
+          threatHtml += `<table style="width:100%;border-collapse:collapse;font-size:12px;">`;
+          threatHtml += `<thead><tr style="background:#fee2e2;">
+            <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #fca5a5;">Severity</th>
+            <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #fca5a5;">File</th>
+            <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #fca5a5;">Line</th>
+            <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #fca5a5;">Threat</th>
+          </tr></thead><tbody>`;
+          
+          threats.forEach((t) => {
+            const sevColor = t.severity === 'critical' ? '#b91c1c' : '#d97706';
+            const sevBg = t.severity === 'critical' ? '#fee2e2' : '#fef3c7';
+            threatHtml += `<tr style="border-bottom:1px solid #e5e7eb;">
+              <td style="padding:5px 8px;"><span style="background:${sevBg};color:${sevColor};padding:2px 6px;border-radius:8px;font-weight:600;font-size:11px;text-transform:uppercase;">${t.severity}</span></td>
+              <td style="padding:5px 8px;font-family:monospace;color:#1e3a8a;">${t.file}</td>
+              <td style="padding:5px 8px;text-align:center;">${t.line}</td>
+              <td style="padding:5px 8px;"><strong>${t.rule}</strong><br/><span style="color:#64748b;">${t.description}</span></td>
+            </tr>`;
+          });
+          
+          threatHtml += `</tbody></table></div>`;
+          
+          Swal.fire({
+            icon: 'error',
+            title: '🛡️ Security Scan Failed',
+            html: threatHtml,
+            width: 700,
+            confirmButtonColor: '#1e3a8a',
+            confirmButtonText: 'OK',
+          });
+        } else {
+          showAlert("error", "File Upload Failed", error.response?.data?.message || error.message || "Failed to upload file.");
+        }
         setIsSubmitting(false);
         return;
       }

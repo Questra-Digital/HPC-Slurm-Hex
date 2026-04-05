@@ -7,6 +7,7 @@ const path = require("path");
 const fs = require("fs");
 const axios = require("axios");
 const { Node } = require("../config/db");
+const { scanZipFile } = require("../services/securityScanner");
 require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 
 const SLURM_PORT = process.env.SLURM_PORT;
@@ -64,6 +65,40 @@ router.post("/upload-ftp", (req, res) => {
     if (!req.file) {
       return res.status(400).json({ message: "No file uploaded" });
     }
+
+    // ── Security Scan ─────────────────────────────────────────────────────
+    // Scan the ZIP contents for malicious patterns before uploading to FTP
+    try {
+      console.log(`[SecurityScanner] Scanning uploaded file: ${req.file.filename}`);
+      const scanResult = scanZipFile(req.file.path);
+      console.log(`[SecurityScanner] Scanned ${scanResult.filesScanned} files against ${scanResult.rulesApplied} rules — ${scanResult.threats.length} threat(s) found`);
+
+      if (!scanResult.safe) {
+        // Clean up the uploaded file
+        if (fs.existsSync(req.file.path)) {
+          fs.unlinkSync(req.file.path);
+        }
+
+        return res.status(400).json({
+          message: `Security scan failed: ${scanResult.threats.length} threat(s) detected in uploaded files`,
+          scanFailed: true,
+          filesScanned: scanResult.filesScanned,
+          threats: scanResult.threats,
+        });
+      }
+    } catch (scanError) {
+      console.error("[SecurityScanner] Scan error:", scanError.message);
+      // If scanning itself fails (e.g. corrupt ZIP), reject the upload
+      if (fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
+      return res.status(400).json({
+        message: `Security scan error: ${scanError.message}`,
+        scanFailed: true,
+        threats: [],
+      });
+    }
+    // ── End Security Scan ─────────────────────────────────────────────────
 
     const localFilePath = req.file.path;
     const remoteFilePath = req.file.filename;
