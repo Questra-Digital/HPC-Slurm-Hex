@@ -1,0 +1,8 @@
+[Unit]
+Description=Prometheus Node Exporter
+After=network.target
+[Service]
+ExecStart=/usr/local/bin/node_exporter --collector.tcpstat --collector.diskstats --collector.filesystem --collector.netdev
+Restart=always
+[Install]
+WantedBy=multi-user.target

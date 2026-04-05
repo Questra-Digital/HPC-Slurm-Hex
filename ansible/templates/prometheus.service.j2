@@ -1,0 +1,8 @@
+[Unit]
+Description=Prometheus Server
+After=network.target
+[Service]
+ExecStart=/usr/local/bin/prometheus --config.file=/etc/prometheus/prometheus.yml --web.listen-address=:{{ prometheus_port }}
+Restart=always
+[Install]
+WantedBy=multi-user.target

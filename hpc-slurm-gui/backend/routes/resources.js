@@ -3,6 +3,10 @@ const axios = require("axios");
 const { ResourceLimit } = require("../config/db");
 const router = express.Router();
 
+// =============================================
+// PARTNER'S AUTH-PROTECTED CRUD ROUTES (unchanged)
+// =============================================
+
 router.get("/resource-limits", async (req, res) => {
     try {
         if (!req.auth) {
@@ -15,14 +19,12 @@ router.get("/resource-limits", async (req, res) => {
             if (group_id) {
                 return res.status(403).json({ message: "Forbidden" });
             }
-
             if (user_id && Number(user_id) !== req.auth.userId) {
                 return res.status(403).json({ message: "Forbidden" });
             }
         }
 
         let whereClause = {};
-        
         if (user_id) whereClause.user_id = user_id;
         if (group_id) whereClause.group_id = group_id;
 
@@ -53,7 +55,6 @@ router.post("/resource-limits", async (req, res) => {
         if (!user_id && !group_id) {
             return res.status(400).json({ message: "Either user_id or group_id must be provided" });
         }
-
         if (user_id && group_id) {
             return res.status(400).json({ message: "Only one of user_id or group_id should be provided" });
         }
@@ -117,5 +118,90 @@ router.delete("/resource-limits", async (req, res) => {
     }
 });
 
+// =============================================
+// OUR REAL-TIME METRICS ENDPOINT (Visualization)
+// =============================================
+
+router.get("/metrics", async (req, res) => {
+  try {
+    const { type = 'cluster', nodeIp, jobId, range = '5m', step = '15s' } = req.query;
+
+    let query;
+
+    switch (type) {
+      case 'cpu':
+        query = `100 - (avg(irate(node_cpu_seconds_total{mode="idle"}[30s])) * 100)`;
+        break;
+      case 'memory':
+        query = `(node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes * 100`;
+        break;
+      case 'gpu':
+        query = `DCGM_FI_DEV_GPU_UTIL`;
+        break;
+      case 'job_cpu':
+        if (!jobId) throw new Error('jobId required');
+        query = `slurm_job_core_usage_total{jobid="${jobId}"}`;
+        break;
+      default:
+        throw new Error('Invalid metric type');
+    }
+
+    // Add node-specific filter if provided
+    if (nodeIp) {
+      query = query.replace('{', `{instance="${nodeIp}:9100",`);
+    }
+
+    const promUrl = `${process.env.PROMETHEUS_URL}/api/v1/query_range`;
+
+    const response = await axios.get(promUrl, {
+      params: {
+        query: query,
+        start: Date.now() / 1000 - 300,
+        end: Date.now() / 1000,
+        step: step
+      },
+      timeout: 10000
+    });
+
+    res.json(response.data.data.result);
+  } catch (error) {
+    console.error("Metrics error:", error.message);
+    res.status(500).json({ 
+      message: "Failed to fetch metrics", 
+      error: error.message 
+    });
+  }
+});
+
+
+// =============================================
+// TEMPORARY MOCK FOR LOCAL TESTING
+// Uncomment this block when you want to test without Prometheus
+// =============================================
+
+// router.get("/metrics", async (req, res) => {
+//   const { type = 'cluster', range = '5m', step = '15s' } = req.query;
+
+//   const mockTimeSeries = (length = 20) => {
+//     const now = Math.floor(Date.now() / 1000);
+//     return [{
+//       metric: { __name__: type },
+//       values: Array.from({ length }, (_, i) => [
+//         now - (length - i) * 15,
+//         (30 + Math.random() * 50).toFixed(2)
+//       ])
+//     }];
+//   };
+
+//   let result;
+//   switch (type) {
+//     case 'cpu':    result = mockTimeSeries(); break;
+//     case 'memory': result = mockTimeSeries(); break;
+//     case 'gpu':    result = mockTimeSeries(); break;
+//     default:       result = [];
+//   }
+
+//   res.json(result);
+// });
 
 module.exports = router;

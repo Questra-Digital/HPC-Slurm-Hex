@@ -31,7 +31,7 @@ services:
     container_name: hpc-slurm-backend
     # expose:  # for development on windows
     #   - "5052"
-    network_mode: "host"
+    network_mode: host
     volumes:
       - ./backend/data:/app/data
     env_file:
@@ -40,6 +40,24 @@ services:
     #   - slurm-hpc-network
     restart: always
 
+  grafana:
+    image: grafana/grafana:latest
+    container_name: hpc-grafana
+    user: "472:472"   # ← Add this line to avoid permission errors
+    ports:
+      - "3000:3000"   # Optional: expose for direct access during setup
+    volumes:
+      - ./grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin   # Change later
+      - GF_USERS_ALLOW_SIGN_UP=false
+    networks:
+      - slurm-hpc-network
+    restart: always
+    # depends_on:
+      # - backend
+      
 networks:
   slurm-hpc-network:
     driver: bridge

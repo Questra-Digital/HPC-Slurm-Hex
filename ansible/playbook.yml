@@ -860,6 +860,104 @@
       pause:
         seconds: "{{ provision_wait }}"
 
+# abrar's provisioning code:
+
+    - name: Install Prometheus Monitoring (if enabled)
+      when: enable_monitoring | int == 1
+      block:
+        - name: Download and Install Node Exporter (system metrics)
+          get_url:
+            url: https://github.com/prometheus/node_exporter/releases/download/v1.8.2/node_exporter-1.8.2.linux-amd64.tar.gz
+            dest: /tmp/node_exporter.tar.gz
+          become: yes
+        - unarchive:
+            src: /tmp/node_exporter.tar.gz
+            dest: /usr/local/bin/
+            remote_src: yes
+            extra_opts: [--strip-components=1]
+          become: yes
+        - name: Create Node Exporter Service
+          template:
+            src: node-exporter.service.j2
+            dest: /etc/systemd/system/node-exporter.service
+          become: yes
+        - systemd:
+            name: node-exporter
+            state: started
+            enabled: yes
+            daemon_reload: yes
+          become: yes
+
+        - name: Download and Install SLURM Exporter (job/node metrics)
+          get_url:
+            url: https://github.com/vpenso/prometheus-slurm-exporter/releases/download/v0.20/slurm_exporter-0.20-linux-amd64
+            dest: /usr/local/bin/slurm-exporter
+            mode: 0755
+          become: yes
+        - name: Create SLURM Exporter Service
+          template:
+            src: slurm-exporter.service.j2
+            dest: /etc/systemd/system/slurm-exporter.service
+          become: yes
+        - systemd:
+            name: slurm-exporter
+            state: started
+            enabled: yes
+            daemon_reload: yes
+          become: yes
+
+        - name: Install DCGM Exporter for NVIDIA GPUs (if enabled)
+          when: enable_nvidia_gpu_driver | int == 1
+          block:
+            - dnf:
+                name: datacenter-gpu-manager  # Assumes NVIDIA repo enabled (from your enable_nvidia_gpu_driver)
+                state: present
+              become: yes
+            - get_url:
+                url: https://github.com/NVIDIA/dcgm-exporter/releases/download/v3.3.6/dcgm-exporter_3.3.6_amd64.rpm
+                dest: /tmp/dcgm-exporter.rpm
+              become: yes
+            - dnf:
+                name: /tmp/dcgm-exporter.rpm
+                state: present
+              become: yes
+            - systemd:
+                name: dcgm-exporter
+                state: started
+                enabled: yes
+              become: yes
+
+        - name: Download and Install Prometheus Server
+          get_url:
+            url: https://github.com/prometheus/prometheus/releases/download/v2.53.0/prometheus-2.53.0.linux-amd64.tar.gz
+            dest: /tmp/prometheus.tar.gz
+          become: yes
+        - unarchive:
+            src: /tmp/prometheus.tar.gz
+            dest: /usr/local/bin/
+            remote_src: yes
+            extra_opts: [--strip-components=1]
+          become: yes
+        - file:
+            path: /etc/prometheus
+            state: directory
+          become: yes
+        - template:
+            src: prometheus.yml.j2
+            dest: /etc/prometheus/prometheus.yml
+          become: yes
+        - name: Create Prometheus Service
+          template:
+            src: prometheus.service.j2
+            dest: /etc/systemd/system/prometheus.service
+          become: yes
+        - systemd:
+            name: prometheus
+            state: started
+            enabled: yes
+            daemon_reload: yes
+          become: yes
+
     - name: Resource Manager Startup
       block:
         - name: Enable and start munge and slurmctld
@@ -936,3 +1034,50 @@
       loop:
         - munge
         - slurmd
+
+        - name: Install Node Exporter on workers (system metrics)
+      when: enable_monitoring | int == 1
+      block:
+        - name: Download and Install Node Exporter
+          get_url:
+            url: https://github.com/prometheus/node_exporter/releases/download/v1.8.2/node_exporter-1.8.2.linux-amd64.tar.gz
+            dest: /tmp/node_exporter.tar.gz
+          become: yes
+        - unarchive:
+            src: /tmp/node_exporter.tar.gz
+            dest: /usr/local/bin/
+            remote_src: yes
+            extra_opts: [--strip-components=1]
+          become: yes
+        - name: Create Node Exporter Service
+          template:
+            src: node-exporter.service.j2
+            dest: /etc/systemd/system/node-exporter.service
+          become: yes
+        - systemd:
+            name: node-exporter
+            state: started
+            enabled: yes
+            daemon_reload: yes
+          become: yes
+
+    - name: Install DCGM Exporter on workers (NVIDIA GPUs)
+      when: enable_monitoring | int == 1 and enable_nvidia_gpu_driver | int == 1
+      block:
+        - dnf:
+            name: datacenter-gpu-manager
+            state: present
+          become: yes
+        - get_url:
+            url: https://github.com/NVIDIA/dcgm-exporter/releases/download/v3.3.6/dcgm-exporter_3.3.6_amd64.rpm
+            dest: /tmp/dcgm-exporter.rpm
+          become: yes
+        - dnf:
+            name: /tmp/dcgm-exporter.rpm
+            state: present
+          become: yes
+        - systemd:
+            name: dcgm-exporter
+            state: started
+            enabled: yes
+          become: yes

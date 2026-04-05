@@ -4,20 +4,19 @@ import os
 import subprocess
 import shutil
 from apscheduler.schedulers.background import BackgroundScheduler
-import requests
 import uuid
 
 app = Flask(__name__)
-CORS(app) 
+CORS(app)
 
-# Declare global variables for FTP credentials
+# FTP credentials (from your partner's version)
 FTP_USER = "f228755"
 FTP_PASSWORD = "au2255"
 
 HOME_DIR = os.path.expanduser("~")
 JOBS_DIR = os.path.join(HOME_DIR, "jobs")
 
-# Function to check if a job is running using scontrol command (no logging)
+# Function to check if a job is running using scontrol command
 def is_job_running(job_id):
     """Check if the job is still RUNNING using scontrol command."""
     try:
@@ -33,9 +32,9 @@ def is_job_running(job_id):
                 job_state = line.split("JobState=")[1].split()[0]
                 return job_state == "RUNNING"
     except subprocess.CalledProcessError:
-        pass 
+        pass
     except Exception:
-        pass  
+        pass
     return False
 
 # Background zipping function
@@ -45,29 +44,25 @@ def zip_all_jobs():
         if not os.path.exists(JOBS_DIR):
             return
         for job_id in os.listdir(JOBS_DIR):
-            # Skip non-numeric folders (like 'myenv', '.git', etc.)
             if not job_id.isdigit():
                 continue
-                
+
             job_folder = os.path.join(JOBS_DIR, job_id)
             if os.path.isdir(job_folder):
-                zip_filepath = os.path.join(JOBS_DIR, job_id)  # shutil adds .zip
+                zip_filepath = os.path.join(JOBS_DIR, job_id)
                 zip_filename = f"{zip_filepath}.zip"
-                
-                # Check if we have write permission
+
                 if not os.access(JOBS_DIR, os.W_OK):
                     continue
-                    
+
                 if is_job_running(job_id):
-                    # Skip running jobs silently
                     continue
+
                 if not os.path.exists(zip_filename) or os.path.getmtime(job_folder) > os.path.getmtime(zip_filename):
                     try:
-                        # Use Python's built-in shutil instead of external zip command
                         shutil.make_archive(zip_filepath, 'zip', JOBS_DIR, job_id)
                         print(f"Background zipped {job_id}")
                     except PermissionError:
-                        # Silently skip permission errors
                         pass
                     except Exception as zip_error:
                         print(f"Failed to zip {job_id}: {zip_error}")
@@ -76,9 +71,40 @@ def zip_all_jobs():
 
 # Start background scheduler
 scheduler = BackgroundScheduler()
-scheduler.add_job(zip_all_jobs, 'interval', minutes=1) 
+scheduler.add_job(zip_all_jobs, 'interval', minutes=1)
 scheduler.start()
 
+# =============================================
+# OUR IMPROVED /connect ENDPOINT
+# =============================================
+@app.route('/connect', methods=['GET'])
+def health_check():
+    try:
+        # Get all IPs and prefer the cluster IP (192.168.90.x)
+        ip_output = subprocess.check_output("hostname -I", shell=True).decode().strip()
+        ips = ip_output.split()
+        cluster_ip = next((ip for ip in ips if ip.startswith('192.168.90.')), ips[0])
+
+        cpu_count = os.cpu_count()
+        try:
+            gpu_count = int(subprocess.check_output("nvidia-smi --list-gpus | wc -l", shell=True).decode().strip())
+        except subprocess.CalledProcessError:
+            gpu_count = 0
+        total_memory = round(os.sysconf('SC_PAGE_SIZE') * os.sysconf('SC_PHYS_PAGES') / (1024 ** 3), 2)
+
+        return jsonify({
+            "status": "active",
+            "ip_address": cluster_ip,          # ← Our important fix
+            "cpu_count": cpu_count,
+            "gpu_count": gpu_count,
+            "total_memory_gb": total_memory,
+        }), 200
+    except Exception as e:
+        return jsonify({"status": "inactive", "message": "System check failed", "error": str(e)}), 500
+
+# =============================================
+# PARTNER'S ORIGINAL ROUTES (kept unchanged)
+# =============================================
 @app.route('/submit-job', methods=['POST'])
 def submit_job():
     data = request.json
@@ -89,7 +115,7 @@ def submit_job():
     cpu_request = data.get('cpu_request')
     gpu_request = data.get('gpu_request', 0)
     memory_request = data.get('memory_request')
-    user_email = data.get('user_email') 
+    user_email = data.get('user_email')
 
     if not all([job_id, job_name, github_url, user_name, cpu_request, memory_request, user_email]):
         return jsonify({"error": "Missing required parameters"}), 400
@@ -106,12 +132,11 @@ def submit_job():
             zip_path = os.path.join(JOBS_DIR, f"{random_uuid}.zip")
 
             if github_url.startswith("ftp://"):
-                # Use global FTP credentials
                 subprocess.run([
-                    "wget", 
+                    "wget",
                     "--ftp-user", FTP_USER,
                     "--ftp-password", FTP_PASSWORD,
-                    github_url, 
+                    github_url,
                     "-O", zip_path
                 ], check=True)
             else:
@@ -120,7 +145,7 @@ def submit_job():
             os.makedirs(job_folder, exist_ok=True)
             subprocess.run(["unzip", "-q", zip_path, "-d", job_folder], check=True)
             os.remove(zip_path)
-        
+
         else:
             subprocess.run(["git", "clone", github_url, job_folder], check=True, capture_output=True, text=True)
 
@@ -132,7 +157,7 @@ def submit_job():
             f"--comment={user_name}",
             "--cpus-per-task", str(cpu_request),
             "--mem", f"{memory_request}G",
-            "--mail-user", user_email,          
+            "--mail-user", user_email,
             "--mail-type", "BEGIN,END,FAIL"
         ]
         if int(gpu_request) > 0:
@@ -174,27 +199,5 @@ def download_job(job_id):
         return send_file(zip_path, as_attachment=True)
     return jsonify({"error": "Zip file not found"}), 404
 
-@app.route('/connect', methods=['GET'])
-def health_check():
-    try:
-        ip = subprocess.check_output("hostname -I", shell=True).decode().strip().split(" ")[0] or "Unknown"
-        cpu_count = os.cpu_count()
-        try:
-            gpu_count = int(subprocess.check_output("nvidia-smi --list-gpus | wc -l", shell=True).decode().strip())
-        except subprocess.CalledProcessError:
-            gpu_count = 0
-        total_memory = round(os.sysconf('SC_PAGE_SIZE') * os.sysconf('SC_PHYS_PAGES') / (1024 ** 3), 2)
-
-        return jsonify({
-            "status": "active",
-            "ip_address": ip,
-            "cpu_count": cpu_count,
-            "gpu_count": gpu_count,
-            "total_memory_gb": total_memory,
-        }), 200
-    except Exception as e:
-        return jsonify({"status": "inactive", "message": "System check failed", "error": str(e)}), 500
-
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5053)
-
