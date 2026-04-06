@@ -101,6 +101,30 @@ const TestSession = sequelize.define("Session", {
     ]
 });
 
+const TestJobFailureNotification = sequelize.define("JobFailureNotification", {
+    id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+    job_id: { type: DataTypes.STRING(64), allowNull: false, unique: true },
+    job_name: { type: DataTypes.STRING(255), allowNull: true },
+    user_id: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        references: { model: TestUser, key: 'id' }
+    },
+    username: { type: DataTypes.STRING(50), allowNull: true },
+    user_email: { type: DataTypes.STRING(100), allowNull: true },
+    last_observed_state: { type: DataTypes.STRING(64), allowNull: true },
+    failure_notified_at: { type: DataTypes.DATE, allowNull: true },
+    created_at: { type: DataTypes.DATE, defaultValue: Sequelize.NOW },
+    updated_at: { type: DataTypes.DATE, defaultValue: Sequelize.NOW },
+}, {
+    tableName: 'job_failure_notifications',
+    indexes: [
+        { unique: true, fields: ['job_id'] },
+        { fields: ['user_id'] },
+        { fields: ['failure_notified_at'] }
+    ]
+});
+
 // Relationships
 TestUser.belongsToMany(TestGroup, { through: TestUserGroup, foreignKey: 'user_id' });
 TestGroup.belongsToMany(TestUser, { through: TestUserGroup, foreignKey: 'group_id' });
@@ -108,6 +132,8 @@ TestUser.hasOne(TestResourceLimit, { foreignKey: 'user_id' });
 TestGroup.hasOne(TestResourceLimit, { foreignKey: 'group_id' });
 TestUser.hasMany(TestSession, { foreignKey: 'user_id' });
 TestSession.belongsTo(TestUser, { foreignKey: 'user_id' });
+TestUser.hasMany(TestJobFailureNotification, { foreignKey: 'user_id' });
+TestJobFailureNotification.belongsTo(TestUser, { foreignKey: 'user_id' });
 
 // Export models for tests
 global.testDb = {
@@ -117,7 +143,8 @@ global.testDb = {
     UserGroup: TestUserGroup,
     Node: TestNode,
     ResourceLimit: TestResourceLimit,
-    Session: TestSession
+    Session: TestSession,
+    JobFailureNotification: TestJobFailureNotification,
 };
 
 // Apply global mock for all tests

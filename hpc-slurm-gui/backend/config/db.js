@@ -124,6 +124,30 @@ const Session = sequelize.define("Session", {
     ]
 });
 
+const JobFailureNotification = sequelize.define("JobFailureNotification", {
+    id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+    job_id: { type: DataTypes.STRING(64), allowNull: false, unique: true },
+    job_name: { type: DataTypes.STRING(255), allowNull: true },
+    user_id: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        references: { model: User, key: 'id' }
+    },
+    username: { type: DataTypes.STRING(50), allowNull: true },
+    user_email: { type: DataTypes.STRING(100), allowNull: true },
+    last_observed_state: { type: DataTypes.STRING(64), allowNull: true },
+    failure_notified_at: { type: DataTypes.DATE, allowNull: true },
+    created_at: { type: DataTypes.DATE, defaultValue: Sequelize.NOW },
+    updated_at: { type: DataTypes.DATE, defaultValue: Sequelize.NOW },
+}, {
+    tableName: 'job_failure_notifications',
+    indexes: [
+        { unique: true, fields: ['job_id'] },
+        { fields: ['user_id'] },
+        { fields: ['failure_notified_at'] },
+    ]
+});
+
 // Relationships
 User.belongsToMany(Group, { through: UserGroup, foreignKey: 'user_id' });
 Group.belongsToMany(User, { through: UserGroup, foreignKey: 'group_id' });
@@ -131,6 +155,8 @@ User.hasOne(ResourceLimit, { foreignKey: 'user_id' });
 Group.hasOne(ResourceLimit, { foreignKey: 'group_id' });
 User.hasMany(Session, { foreignKey: 'user_id' });
 Session.belongsTo(User, { foreignKey: 'user_id' });
+User.hasMany(JobFailureNotification, { foreignKey: 'user_id' });
+JobFailureNotification.belongsTo(User, { foreignKey: 'user_id' });
 
 const syncDatabase = async () => {
     const syncOptions = buildSyncOptions();
@@ -152,4 +178,14 @@ const syncDatabase = async () => {
 
 const dbReady = syncDatabase();
 
-module.exports = { sequelize, User, Group, UserGroup, Node, ResourceLimit, Session, dbReady };
+module.exports = {
+    sequelize,
+    User,
+    Group,
+    UserGroup,
+    Node,
+    ResourceLimit,
+    Session,
+    JobFailureNotification,
+    dbReady,
+};

@@ -111,6 +111,28 @@ describe('Email Service Tests', () => {
             emailService.isConfigured = originalConfigured;
             emailService.transporter = originalTransporter;
         });
+
+        test('should handle invalid email in sendJobFailureEmail', async () => {
+            const originalConfigured = emailService.isConfigured;
+            const originalTransporter = emailService.transporter;
+
+            emailService.isConfigured = true;
+            emailService.transporter = {};
+
+            const result = await emailService.sendJobFailureEmail('invalid-email', {
+                username: 'testuser',
+                jobId: '123',
+                jobName: 'training-job',
+                jobState: 'FAILED',
+                failedAt: new Date().toISOString(),
+            });
+
+            expect(result.success).toBe(false);
+            expect(result.reason).toBe('invalid_email');
+
+            emailService.isConfigured = originalConfigured;
+            emailService.transporter = originalTransporter;
+        });
     });
 
     describe('Email Service Functionality', () => {
@@ -155,6 +177,24 @@ describe('Email Service Tests', () => {
             // Restore config
             emailService.isConfigured = originalConfigured;
         });
+
+        test('should return appropriate response when failed-job email is disabled', async () => {
+            const originalEnabled = emailService.config.enabled;
+            emailService.config.enabled = false;
+
+            const result = await emailService.sendJobFailureEmail('test@example.com', {
+                username: 'testuser',
+                jobId: '123',
+                jobName: 'training-job',
+                jobState: 'FAILED',
+                failedAt: new Date().toISOString(),
+            });
+
+            expect(result.success).toBe(false);
+            expect(result.reason).toBe('disabled');
+
+            emailService.config.enabled = originalEnabled;
+        });
     });
 
     describe('Delay Helper', () => {
@@ -168,6 +208,33 @@ describe('Email Service Tests', () => {
             expect(elapsed).toBeGreaterThanOrEqual(90);
             expect(elapsed).toBeLessThan(200);
         });
+    });
+});
+
+describe('Job Failure Email Template', () => {
+    const { getJobFailureEmailTemplate } = require('../templates/jobFailureEmail');
+
+    test('should generate failed-job template with required fields', () => {
+        const data = {
+            username: 'alice',
+            jobId: '456',
+            jobName: 'daily-train',
+            jobState: 'FAILED',
+            failedAt: '2026-04-06T10:00:00.000Z',
+            jobsUrl: 'http://localhost:5051/'
+        };
+
+        const template = getJobFailureEmailTemplate(data);
+
+        expect(template).toHaveProperty('subject');
+        expect(template).toHaveProperty('text');
+        expect(template).toHaveProperty('html');
+        expect(template.subject).toContain(data.jobName);
+        expect(template.text).toContain(data.jobId);
+        expect(template.text).toContain(data.jobName);
+        expect(template.html).toContain(data.jobId);
+        expect(template.html).toContain(data.jobName);
+        expect(template.html).toContain(data.jobsUrl);
     });
 });
 

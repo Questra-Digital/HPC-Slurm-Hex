@@ -6,7 +6,7 @@ const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
 const axios = require("axios");
-const { Node } = require("../config/db");
+const { Node, JobFailureNotification } = require("../config/db");
 require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 
 const SLURM_PORT = process.env.SLURM_PORT;
@@ -15,6 +15,41 @@ const SLURM_PORT = process.env.SLURM_PORT;
 const getMasterNodeIp = async () => {
   const masterNode = await Node.findOne({ where: { node_type: 'master' } });
   return masterNode ? masterNode.ip_address : null;
+};
+
+const trackSubmittedJob = async (req) => {
+  try {
+    const jobId = String(req.body?.Job_id || "").trim();
+    if (!jobId || !req.auth?.userId) {
+      return;
+    }
+
+    const defaults = {
+      job_id: jobId,
+      job_name: req.body?.Job_name || null,
+      user_id: req.auth.userId,
+      username: req.auth.username || req.body?.user_name || null,
+      user_email: req.auth.email || req.body?.user_email || null,
+      last_observed_state: "SUBMITTED",
+    };
+
+    const [record, created] = await JobFailureNotification.findOrCreate({
+      where: { job_id: jobId },
+      defaults,
+    });
+
+    if (!created) {
+      await record.update({
+        job_name: req.body?.Job_name || record.job_name,
+        user_id: req.auth.userId || record.user_id,
+        username: req.auth.username || req.body?.user_name || record.username,
+        user_email: req.auth.email || req.body?.user_email || record.user_email,
+        last_observed_state: "SUBMITTED",
+      });
+    }
+  } catch (error) {
+    console.warn("[jobs] Could not track submitted job for failure notifications:", error.message);
+  }
 };
 
 // FTP credentials (same as in your Python script)
@@ -154,6 +189,9 @@ router.post("/submit-job", async (req, res) => {
 
     console.log("Proxying job submission to master:", masterIp);
     const response = await axios.post(`http://${masterIp}:${SLURM_PORT}/submit-job`, req.body, { timeout: 120000 });
+
+    await trackSubmittedJob(req);
+
     res.json(response.data);
   } catch (error) {
     console.error("Failed to submit job to master:", error.message);

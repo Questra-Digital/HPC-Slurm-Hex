@@ -10,6 +10,7 @@ const jobsRoutes = require("./routes/jobs");
 const emailRoutes = require("./routes/email");
 const { requireAuth } = require("./middleware/auth");
 const { dbReady } = require("./config/db");
+const { startJobFailureMonitor } = require("./services/jobFailureMonitor");
 
 dotenv.config();
 const app = express();
@@ -30,7 +31,10 @@ const PORT = process.env.PORT;
 
 dbReady
 	.then(() => {
-		app.listen(PORT, '0.0.0.0', () => console.log(`Server running on port ${PORT}`));
+		app.listen(PORT, '0.0.0.0', () => {
+			console.log(`Server running on port ${PORT}`);
+			startJobFailureMonitor();
+		});
 	})
 	.catch((error) => {
 		console.error("Fatal: database initialization failed.", error);

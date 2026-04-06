@@ -1,5 +1,6 @@
 const nodemailer = require("nodemailer");
 const { getWelcomeEmailTemplate } = require("../templates/welcomeEmail");
+const { getJobFailureEmailTemplate } = require("../templates/jobFailureEmail");
 
 // Load environment variables before initializing service
 require("dotenv").config();
@@ -159,6 +160,79 @@ class EmailService {
                 reason: "send_error",
                 message: error.message,
                 error: error
+            };
+        }
+    }
+
+    /**
+     * Send failed-job email notification to user.
+     *
+     * @param {string} email - Recipient email address
+     * @param {Object} payload - Job failure details
+     * @param {string} payload.username - Username
+     * @param {string|number} payload.jobId - Job id
+     * @param {string} payload.jobName - Job name
+     * @param {string} payload.jobState - Job state
+     * @param {string} payload.failedAt - ISO timestamp
+     * @returns {Promise<Object>} Result object with success status
+     */
+    async sendJobFailureEmail(email, payload = {}) {
+        if (!this.config.enabled) {
+            console.log(`Email notifications disabled. Would have sent failed-job email to ${email}`);
+            return {
+                success: false,
+                reason: "disabled",
+                message: "Email notifications are disabled"
+            };
+        }
+
+        if (!this.isConfigured || !this.transporter) {
+            console.warn(`Email not configured. Cannot send failed-job email to ${email}`);
+            return {
+                success: false,
+                reason: "not_configured",
+                message: "Email service is not properly configured"
+            };
+        }
+
+        try {
+            if (!this.isValidEmail(email)) {
+                return {
+                    success: false,
+                    reason: "invalid_email",
+                    message: "Invalid email address"
+                };
+            }
+
+            const jobsUrl = `${this.appUrl}/`;
+            const emailContent = getJobFailureEmailTemplate({
+                username: payload.username,
+                jobId: payload.jobId,
+                jobName: payload.jobName,
+                jobState: payload.jobState,
+                failedAt: payload.failedAt,
+                jobsUrl,
+            });
+
+            const result = await this.sendEmailWithRetry({
+                from: this.config.from,
+                to: email,
+                subject: emailContent.subject,
+                text: emailContent.text,
+                html: emailContent.html
+            });
+
+            if (result.success) {
+                console.log(`Failed-job email sent to ${email} for job ${payload.jobId}`);
+            }
+
+            return result;
+        } catch (error) {
+            return {
+                success: false,
+                reason: "send_error",
+                message: error.message,
+                error,
             };
         }
     }
