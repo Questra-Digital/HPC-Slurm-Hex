@@ -19,6 +19,7 @@ const Login = ({ setUser }) => {
     try {
       const res = await axios.post(`${API_BASE_URL}/auth/login`, { email, password });
 
+      sessionStorage.setItem('token', res.data.token);
       sessionStorage.setItem('id', res.data.userId);
       sessionStorage.setItem('user_role', res.data.role);
       sessionStorage.setItem('username', res.data.name);
