@@ -11,6 +11,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "adm-zip": "^0.5.16",
     "axios": "^1.7.9",
     "basic-ftp": "^5.0.5",
     "bcryptjs": "^2.4.3",

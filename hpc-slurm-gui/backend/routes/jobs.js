@@ -7,6 +7,7 @@ const path = require("path");
 const fs = require("fs");
 const axios = require("axios");
 const { Node, JobFailureNotification } = require("../config/db");
+const { scanZipFile } = require("../services/securityScanner");
 require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 
 const SLURM_PORT = process.env.SLURM_PORT;
@@ -98,6 +99,33 @@ router.post("/upload-ftp", (req, res) => {
 
     if (!req.file) {
       return res.status(400).json({ message: "No file uploaded" });
+    }
+
+    try {
+      const scanResult = scanZipFile(req.file.path);
+
+      if (!scanResult.safe) {
+        if (fs.existsSync(req.file.path)) {
+          fs.unlinkSync(req.file.path);
+        }
+
+        return res.status(400).json({
+          message: `Security scan failed: ${scanResult.threats.length} threat(s) detected in uploaded files`,
+          scanFailed: true,
+          filesScanned: scanResult.filesScanned,
+          threats: scanResult.threats,
+        });
+      }
+    } catch (scanError) {
+      if (fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
+
+      return res.status(400).json({
+        message: `Security scan error: ${scanError.message}`,
+        scanFailed: true,
+        threats: [],
+      });
     }
 
     const localFilePath = req.file.path;
@@ -313,6 +341,85 @@ router.get("/download/:nodeIp/:filename", async (req, res) => {
       error: "Failed to download file",
       message: error.response?.data?.error || error.message
     });
+  }
+});
+
+const jobsToCsv = (jobs) => {
+  const headers = [
+    "Job ID", "Job Name", "User", "Partition", "Node",
+    "Start", "End", "State", "Exit Code",
+    "CPUs", "GPUs", "Memory (GB)",
+  ];
+
+  const escapeField = (val) => {
+    const str = val == null ? "" : String(val);
+    if (str.includes(",") || str.includes('"') || str.includes("\n")) {
+      return `"${str.replace(/"/g, '""')}"`;
+    }
+    return str;
+  };
+
+  const rows = jobs.map((job) => [
+    job.jobId,
+    job.jobName,
+    job.userName || "",
+    job.partition || "",
+    job.node || "",
+    job.start || "",
+    job.end || "",
+    job.state || "",
+    job.exitCode || "",
+    job.cpu_request || 0,
+    job.gpu_request || 0,
+    job.memory_request || 0,
+  ].map(escapeField).join(","));
+
+  return [headers.join(","), ...rows].join("\n");
+};
+
+router.get("/export-csv", async (req, res) => {
+  try {
+    if (req.auth?.role !== "admin") {
+      return res.status(403).json({ error: "Admin access required" });
+    }
+
+    const masterIp = await getMasterNodeIp();
+    if (!masterIp) {
+      return res.status(400).json({ error: "Master node not configured" });
+    }
+
+    const response = await axios.get(`http://${masterIp}:${SLURM_PORT}/jobs`, { timeout: 15000 });
+    let jobs = response.data.jobs || [];
+
+    const duration = String(req.query.duration || "all");
+    if (duration !== "all") {
+      const now = Date.now();
+      const durationMap = {
+        "24h": 24 * 60 * 60 * 1000,
+        "7d": 7 * 24 * 60 * 60 * 1000,
+        "30d": 30 * 24 * 60 * 60 * 1000,
+        "90d": 90 * 24 * 60 * 60 * 1000,
+      };
+
+      const windowMs = durationMap[duration];
+      if (windowMs) {
+        const cutoff = now - windowMs;
+        jobs = jobs.filter((job) => {
+          if (!job.start) return false;
+          const timestamp = new Date(job.start).getTime();
+          return Number.isFinite(timestamp) && timestamp >= cutoff;
+        });
+      }
+    }
+
+    const csv = jobsToCsv(jobs);
+    const filename = `job_history_${duration}_${new Date().toISOString().slice(0, 10)}.csv`;
+
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    return res.send(csv);
+  } catch (error) {
+    return res.status(500).json({ error: "Failed to export job history", message: error.message });
   }
 });
 

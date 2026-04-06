@@ -23,6 +23,8 @@ export default function JobsPage({ authUser }) {
   const [nextJobId, setNextJobId] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false); // Separate state for submit button
+  const [exportDuration, setExportDuration] = useState("all");
+  const [isExporting, setIsExporting] = useState(false);
   const [resourceLimits, setResourceLimits] = useState({
     max_cpu: 0,
     max_gpu: 0,
@@ -179,6 +181,36 @@ export default function JobsPage({ authUser }) {
     return true;
   };
 
+  const handleExportCsv = async () => {
+    if (userRole !== "admin") {
+      return;
+    }
+
+    setIsExporting(true);
+    try {
+      const response = await apiClient.get(`/jobs/export-csv?duration=${exportDuration}`, {
+        responseType: "blob",
+        retrySafe: true,
+      });
+
+      const blob = new Blob([response.data], { type: "text/csv" });
+      const url = window.URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `job_history_${exportDuration}_${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.URL.revokeObjectURL(url);
+
+      showAlert("success", "Export Complete", "Job history CSV downloaded successfully.");
+    } catch (error) {
+      showAlert("error", "Export Failed", error.response?.data?.error || error.message || "Failed to export CSV.");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   const handleSubmitJob = async () => {
     // Node selection is now optional - Slurm will handle scheduling
     if (!jobName || !source || !cpuRequest || !memoryRequest) {
@@ -236,7 +268,36 @@ export default function JobsPage({ authUser }) {
         Swal.close();
       } catch (error) {
         Swal.close();
-        showAlert("error", "File Upload Failed", error.response?.data?.message || error.message || "Failed to upload file.");
+
+        if (error.response?.data?.scanFailed) {
+          const threats = error.response.data.threats || [];
+          const filesScanned = error.response.data.filesScanned || 0;
+
+          let threatHtml = "<div style=\"text-align:left;max-height:350px;overflow-y:auto;font-size:13px;\">";
+          threatHtml += `<p style=\"margin-bottom:10px;color:#475569;\">Scanned <strong>${filesScanned}</strong> file(s). Found <strong style=\"color:#b91c1c;\">${threats.length}</strong> threat(s):</p>`;
+          threatHtml += "<table style=\"width:100%;border-collapse:collapse;font-size:12px;\">";
+          threatHtml += "<thead><tr style=\"background:#fee2e2;\"><th style=\"padding:6px 8px;text-align:left;border-bottom:1px solid #fca5a5;\">Severity</th><th style=\"padding:6px 8px;text-align:left;border-bottom:1px solid #fca5a5;\">File</th><th style=\"padding:6px 8px;text-align:left;border-bottom:1px solid #fca5a5;\">Line</th><th style=\"padding:6px 8px;text-align:left;border-bottom:1px solid #fca5a5;\">Threat</th></tr></thead><tbody>";
+
+          threats.forEach((threat) => {
+            const severityColor = threat.severity === "critical" ? "#b91c1c" : "#d97706";
+            const severityBackground = threat.severity === "critical" ? "#fee2e2" : "#fef3c7";
+            threatHtml += `<tr style=\"border-bottom:1px solid #e5e7eb;\"><td style=\"padding:5px 8px;\"><span style=\"background:${severityBackground};color:${severityColor};padding:2px 6px;border-radius:8px;font-weight:600;font-size:11px;text-transform:uppercase;\">${threat.severity}</span></td><td style=\"padding:5px 8px;font-family:monospace;color:#1e3a8a;\">${threat.file}</td><td style=\"padding:5px 8px;text-align:center;\">${threat.line}</td><td style=\"padding:5px 8px;\"><strong>${threat.rule}</strong><br/><span style=\"color:#64748b;\">${threat.description}</span></td></tr>`;
+          });
+
+          threatHtml += "</tbody></table></div>";
+
+          Swal.fire({
+            icon: "error",
+            title: "Security Scan Failed",
+            html: threatHtml,
+            width: 700,
+            confirmButtonColor: "#1e3a8a",
+            confirmButtonText: "OK",
+          });
+        } else {
+          showAlert("error", "File Upload Failed", error.response?.data?.message || error.message || "Failed to upload file.");
+        }
+
         setIsSubmitting(false);
         return;
       }
@@ -550,7 +611,31 @@ export default function JobsPage({ authUser }) {
           </div>
 
           <div className="section jobs-list-section">
-            <h2>Jobs Status</h2>
+            <div className="jobs-header">
+              <h2>Jobs Status</h2>
+              {userRole === "admin" && (
+                <div className="export-controls">
+                  <select
+                    className="export-select"
+                    value={exportDuration}
+                    onChange={(e) => setExportDuration(e.target.value)}
+                  >
+                    <option value="24h">Last 24 Hours</option>
+                    <option value="7d">Last 7 Days</option>
+                    <option value="30d">Last 30 Days</option>
+                    <option value="90d">Last 90 Days</option>
+                    <option value="all">All Time</option>
+                  </select>
+                  <button
+                    className="export-btn"
+                    onClick={handleExportCsv}
+                    disabled={isExporting}
+                  >
+                    {isExporting ? "Exporting..." : "Export CSV"}
+                  </button>
+                </div>
+              )}
+            </div>
             <div className="tabs-container">
               <div className={getTabClass(0)} onClick={() => setSelectedTab(0)}>RUNNING</div>
               <div className={getTabClass(1)} onClick={() => setSelectedTab(1)}>COMPLETED</div>
@@ -905,6 +990,51 @@ export default function JobsPage({ authUser }) {
           color: #64748b;
           font-style: italic;
         }
+
+        .jobs-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          flex-wrap: wrap;
+          gap: 10px;
+        }
+
+        .export-controls {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .export-select {
+          padding: 6px 10px;
+          border: 1px solid #e2e8f0;
+          border-radius: 6px;
+          font-size: 13px;
+          color: #334155;
+          background: #fff;
+          cursor: pointer;
+        }
+
+        .export-btn {
+          padding: 6px 14px;
+          background: #1e3a8a;
+          color: #fff;
+          border: none;
+          border-radius: 6px;
+          font-size: 13px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: background 0.2s;
+        }
+
+        .export-btn:hover {
+          background: #1e40af;
+        }
+
+        .export-btn:disabled {
+          background: #94a3b8;
+          cursor: not-allowed;
+        }
         
         @media (max-width: 1024px) {
           .content-container {
@@ -922,6 +1052,10 @@ export default function JobsPage({ authUser }) {
           }
           .jobs-list-section {
             min-width: 100%;
+          }
+          .jobs-header {
+            flex-direction: column;
+            align-items: flex-start;
           }
         }
       `}</style>

@@ -50,6 +50,10 @@ describe('ResourceAllocation Component', () => {
     jest.clearAllMocks();
 
     axios.get.mockImplementation((url) => {
+      if (url.includes('/resources/metrics')) {
+        return Promise.resolve({ data: [] });
+      }
+
       if (url.includes('/nodes/get-nodes-list')) {
         return Promise.resolve({ data: mockNodes });
       }
@@ -126,8 +130,7 @@ describe('ResourceAllocation Component', () => {
     await waitFor(() => {
       expect(axios.post).toHaveBeenCalledWith(
         '/resources/resource-limits',
-        expect.objectContaining({ user_id: 1 }),
-        { retrySafe: false }
+        expect.objectContaining({ user_id: 1 })
       );
     });
   });

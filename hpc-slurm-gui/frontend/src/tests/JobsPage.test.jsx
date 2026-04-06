@@ -23,6 +23,18 @@ describe("JobsPage Component", () => {
   beforeEach(() => {
     jest.clearAllMocks();
 
+    if (!window.URL.createObjectURL) {
+      window.URL.createObjectURL = jest.fn(() => "blob:test");
+    } else {
+      window.URL.createObjectURL = jest.fn(() => "blob:test");
+    }
+
+    if (!window.URL.revokeObjectURL) {
+      window.URL.revokeObjectURL = jest.fn();
+    } else {
+      window.URL.revokeObjectURL = jest.fn();
+    }
+
     axios.get.mockImplementation((url) => {
       if (url === "/nodes/get-nodes-list") {
         return Promise.resolve({
@@ -74,6 +86,12 @@ describe("JobsPage Component", () => {
         });
       }
 
+      if (url.startsWith("/jobs/export-csv")) {
+        return Promise.resolve({
+          data: new Blob(["Job ID,Job Name\n1,Example"], { type: "text/csv" }),
+        });
+      }
+
       return Promise.reject(new Error("Unhandled axios.get URL"));
     });
 
@@ -108,6 +126,35 @@ describe("JobsPage Component", () => {
         icon: "warning",
         title: "Incomplete Form",
         text: "Please fill out all required fields (Job Name, Source, CPU, Memory).",
+        confirmButtonColor: "#1e3a8a",
+        confirmButtonText: "OK",
+      });
+    });
+  });
+
+  it("shows export controls for admin and calls export endpoint", async () => {
+    const adminUser = {
+      ...authUser,
+      role: "admin",
+    };
+
+    render(<JobsPage authUser={adminUser} />);
+
+    const exportButton = await screen.findByRole("button", { name: "Export CSV" });
+    fireEvent.click(exportButton);
+
+    await waitFor(() => {
+      expect(axios.get).toHaveBeenCalledWith(
+        "/jobs/export-csv?duration=all",
+        expect.objectContaining({
+          responseType: "blob",
+          retrySafe: true,
+        })
+      );
+      expect(Swal.fire).toHaveBeenCalledWith({
+        icon: "success",
+        title: "Export Complete",
+        text: "Job history CSV downloaded successfully.",
         confirmButtonColor: "#1e3a8a",
         confirmButtonText: "OK",
       });
