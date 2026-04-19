@@ -1,5 +1,6 @@
 # Environment files (contain secrets)
 .env
+!.env.example
 
 # Dependencies
 node_modules/
