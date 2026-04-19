@@ -36,6 +36,8 @@
 - 📊 **Resource Quota Enforcement** — Set per-user or per-group CPU, GPU, and memory limits.
 - 🌐 **Environment (Node) Management** — Connect/disconnect master and worker nodes, view real-time Slurm node status (CPU load, memory, partitions, GRES).
 - ✉️ **Email Notifications** — Welcome emails on user creation; SLURM `--mail-type` notifications for job BEGIN, END, and FAIL events.
+- 📈 **Real-Time Resource Monitoring** — Live CPU, memory, and GPU utilization graphs powered by Prometheus + Grafana, with per-node filtering and configurable refresh rates.
+- 📥 **Job History CSV Export** — Export filtered job history (24h / 7d / 30d / 90d / all) as CSV files for reporting and auditing.
 
 ### For Users
 - 📤 **Browser-Based Job Submission** — Upload a ZIP file or provide a Git repository URL; the system clones/extracts, detects the shell script (`run.sh`, `main.sh`, etc.), and submits via `sbatch` automatically.
@@ -44,42 +46,53 @@
 - ❌ **Job Cancellation** — Cancel running jobs directly from the GUI.
 - ⚙️ **Profile Settings** — Change password, update email, and manage personal preferences.
 
+### Security & Session Management
+- 🛡️ **Malicious Code Scanning** — Every uploaded ZIP file is scanned against 30+ security rules before job submission. Detects reverse shells, crypto miners, fork bombs, privilege escalation, exploit frameworks, YAML deserialization attacks, and more. Malicious uploads are automatically rejected with detailed threat reports.
+- 🔑 **Secure Session Management** — JWT access tokens (15 min TTL) with rotating httpOnly refresh tokens stored in SQLite. Supports idle timeout (30 min), absolute session lifetime (12 hr), multi-device sessions, and automatic token reuse detection.
+- 🚪 **Session Lifecycle** — Login creates an independent session per device; `/refresh` rotates tokens; `/logout` revokes current session; `/logout-all` revokes all sessions for a user.
+- 🔍 **Cross-Tab Idle Detection** — Frontend tracks user activity across browser tabs; warns before idle timeout and forces logout on expiry.
+
 ---
 
 ## 🏗️ Architecture
 
-HPC-Slurm-Hex consists of **five independently deployable modules** organized into three layers:
+HPC-Slurm-Hex consists of multiple independently deployable modules organized into four layers:
 
 ```
-┌──────────────────────────────────────────────────────────┐
-│                     Web Browser                          │
-└────────────────────────┬─────────────────────────────────┘
-                         │
-┌────────────────────────▼─────────────────────────────────┐
-│                    hpc-slurm-gui                         │
-│  ┌──────────────┐  ┌─────────────┐  ┌─────────────────┐ │
-│  │   Frontend    │  │   Nginx     │  │    Backend      │ │
-│  │   (React +   │◄─┤  Reverse    │  │  (Express.js +  │ │
-│  │    Vite)     │  │   Proxy     │──►  SQLite + JWT)  │ │
-│  └──────────────┘  └─────────────┘  └────────┬────────┘ │
-│       Docker Compose (3 containers)          │          │
-└──────────────────────────────────────────────┼──────────┘
-                                               │ HTTP API
-                    ┌──────────────────────────▼──────────┐
-                    │          slurm-master               │
-                    │     (Express.js + Redis)            │
-                    │   Runs on SLURM controller node     │
-                    └──────────┬───────────────┬──────────┘
-                               │               │
-                    sbatch / sacct         HTTP proxy
-                    scontrol              to workers
-                               │               │
-              ┌────────────────▼───┐   ┌───────▼──────────┐
-              │    slurm-worker    │   │   slurm-worker   │
-              │   (Flask + APScheduler) │   (Flask + APScheduler)│
-              │  Runs on each      │   │  Runs on each    │
-              │  compute node      │   │  compute node    │
-              └────────────────────┘   └──────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│                          Web Browser                            │
+└──────────────────────────────┬───────────────────────────────────┘
+                               │
+┌──────────────────────────────▼───────────────────────────────────┐
+│                       hpc-slurm-gui  (Docker Compose)           │
+│                                                                 │
+│  ┌──────────────┐  ┌─────────────┐  ┌────────────────────────┐  │
+│  │   Frontend   │  │   Nginx     │  │       Backend          │  │
+│  │  (React +    │◄─┤  Reverse    │  │  (Express.js + SQLite  │  │
+│  │   Vite)      │  │   Proxy     │──►  JWT + Session Mgmt   │  │
+│  └──────────────┘  └──────┬──────┘  │  Security Scanner)     │  │
+│                           │         └───────────┬────────────┘  │
+│  ┌──────────────┐         │                     │               │
+│  │   Grafana    │◄────────┘                     │               │
+│  │  (Dashboards)│                               │               │
+│  └──────┬───────┘                               │               │
+└─────────┼───────────────────────────────────────┼───────────────┘
+          │                                       │ HTTP API
+          │ PromQL                                │
+┌─────────▼──────────┐   ┌────────────────────────▼───────────────┐
+│     Prometheus     │   │            slurm-master               │
+│  (Metrics Server)  │   │       (Express.js + Redis)             │
+│  Node / SLURM /    │   │     Runs on SLURM controller node     │
+│  DCGM Exporters    │   └───────────┬─────────────┬─────────────┘
+└────────────────────┘               │             │
+                          sbatch / sacct      HTTP proxy
+                          scontrol           to workers
+                                     │             │
+                    ┌────────────────▼──┐   ┌──────▼───────────┐
+                    │   slurm-worker    │   │   slurm-worker   │
+                    │ (Flask + APSched) │   │ (Flask + APSched)│
+                    │  + Node Exporter  │   │  + Node Exporter │
+                    └───────────────────┘   └──────────────────┘
 ```
 
 ### Module Breakdown
@@ -92,6 +105,9 @@ HPC-Slurm-Hex consists of **five independently deployable modules** organized in
 | **Slurm Master** | Express.js, Redis | API layer on the SLURM controller — executes `sbatch`, `sacct`, `scontrol`, caches job data in Redis | `5053` |
 | **Slurm Worker** | Flask, APScheduler | Lightweight API on each compute node — handles job submission, health checks, result zipping & download | `5053` |
 | **Ansible** | Ansible Playbook (YAML) | Automated OpenHPC + SLURM cluster provisioning for master and worker nodes | N/A |
+| **Grafana** | Grafana (Docker) | Real-time resource monitoring dashboards for CPU, memory, GPU, and SLURM job metrics | `3000` |
+| **Prometheus** | Prometheus + Node Exporter + SLURM Exporter + DCGM Exporter | Metrics collection from all cluster nodes; provisioned via Ansible | `9090` |
+| **Security Scanner** | AdmZip + custom rule engine | Pre-submission malicious code scanning with 30+ threat detection rules | N/A |
 
 ---
 
@@ -99,56 +115,76 @@ HPC-Slurm-Hex consists of **five independently deployable modules** organized in
 
 ```
 HPC-Slurm-Hex/
-├── ansible/                        # Cluster provisioning automation
-│   ├── input.yml                   # Configurable cluster variables (IPs, hostnames, feature flags)
-│   ├── inventory.yml               # Ansible inventory (master + workers)
-│   ├── playbook.yml                # Full OpenHPC + SLURM installation playbook
-│   └── vault.yml                   # Encrypted sensitive variables
+├── ansible/                           # Cluster provisioning automation
+│   ├── input.yml                      # Configurable cluster variables (IPs, hostnames, feature flags)
+│   ├── inventory.yml                  # Ansible inventory (master + workers)
+│   ├── playbook.yml                   # Full OpenHPC + SLURM + monitoring installation playbook
+│   ├── vault.yml                      # Encrypted sensitive variables
+│   └── templates/                     # Systemd service templates for monitoring
+│       ├── node-exporter.service.j2   # Node Exporter (system metrics per node)
+│       ├── prometheus.service.j2      # Prometheus server service
+│       ├── prometheus.yml.j2          # Prometheus scrape config (nodes, SLURM, DCGM)
+│       └── slurm-exporter.service.j2  # SLURM job/queue exporter
 │
-├── hpc-slurm-gui/                  # Web GUI (Dockerized)
-│   ├── docker-compose.yaml         # Orchestrates frontend, backend, and Nginx
-│   ├── nginx.conf                  # Reverse proxy configuration
-│   ├── frontend/                   # React + Vite SPA
+├── hpc-slurm-gui/                     # Web GUI (Dockerized)
+│   ├── docker-compose.yaml            # Orchestrates frontend, backend, Nginx, and Grafana
+│   ├── nginx.conf                     # Reverse proxy (frontend, backend, /grafana/)
+│   ├── grafana/                       # Grafana provisioning
+│   │   └── provisioning/
+│   │       ├── dashboards/slurm.json  # Pre-built SLURM cluster monitoring dashboard
+│   │       └── datasources/prometheus.yml # Prometheus data source config
+│   ├── frontend/                      # React + Vite SPA
 │   │   └── src/
+│   │       ├── api/client.js               # Axios client with auth interceptors & token refresh
+│   │       ├── auth/authStore.js            # Centralized auth state management
+│   │       ├── sessionPolicy.js             # Frontend session policy (TTL, idle, cross-tab)
 │   │       ├── components/
-│   │       │   ├── AdminSetup.jsx       # First-time admin registration
-│   │       │   ├── Login.jsx            # Authentication page
-│   │       │   ├── Home.jsx             # Main layout shell
-│   │       │   ├── Sidebar.jsx          # Permission-aware navigation
-│   │       │   ├── Dashboard.jsx        # Job statistics and quick actions
-│   │       │   ├── JobsPage.jsx         # Job submission, listing, cancellation, download
-│   │       │   ├── UserGroup.jsx        # User & group CRUD, group membership
-│   │       │   ├── ResourceAllocation.jsx # Per-user/group CPU, GPU, memory quotas
-│   │       │   ├── RemoteNodes.jsx      # Connect/disconnect master and worker nodes
-│   │       │   └── Settings.jsx         # Profile management
-│   │       └── tests/                   # Jest + React Testing Library tests
+│   │       │   ├── AdminSetup.jsx            # First-time admin registration
+│   │       │   ├── Login.jsx                 # Authentication page with session support
+│   │       │   ├── Home.jsx                  # Main layout shell with idle detection
+│   │       │   ├── Sidebar.jsx               # Permission-aware navigation
+│   │       │   ├── Dashboard.jsx             # Job statistics and quick actions
+│   │       │   ├── JobsPage.jsx              # Job submission, security scan feedback, CSV export
+│   │       │   ├── UserGroup.jsx             # User & group CRUD, group membership
+│   │       │   ├── ResourceAllocation.jsx    # Quotas + real-time CPU/memory/GPU graphs
+│   │       │   ├── RemoteNodes.jsx           # Connect/disconnect master and worker nodes
+│   │       │   └── Settings.jsx              # Profile management
+│   │       └── tests/                        # Jest + React Testing Library tests
 │   │
-│   └── backend/                    # Express.js REST API
-│       ├── config/db.js            # Sequelize models (User, Group, Node, ResourceLimit)
+│   └── backend/                       # Express.js REST API
+│       ├── config/
+│       │   ├── db.js                  # Sequelize models (User, Group, Node, ResourceLimit, Session)
+│       │   └── sessionPolicy.js       # Session TTL / idle / absolute lifetime policy
+│       ├── middleware/auth.js         # JWT + session validation middleware
 │       ├── routes/
-│       │   ├── auth.js             # Login, signup, admin setup
-│       │   ├── users.js            # User/group CRUD, permissions
-│       │   ├── jobs.js             # Job proxy (submit, cancel, list, download), FTP upload
-│       │   ├── nodes.js            # Node connection and Slurm node status
-│       │   ├── resources.js        # Resource limit CRUD
-│       │   └── email.js            # Email notification endpoints
-│       ├── services/emailService.js # Nodemailer SMTP integration
-│       ├── templates/welcomeEmail.js # HTML email template
+│       │   ├── auth.js                # Login, signup, refresh, logout, logout-all, session-policy
+│       │   ├── users.js               # User/group CRUD, permissions
+│       │   ├── jobs.js                # Job proxy, FTP upload, security scan, CSV export
+│       │   ├── nodes.js               # Node connection and Slurm node status
+│       │   ├── resources.js           # Resource limit CRUD + Prometheus metrics proxy
+│       │   └── email.js               # Email notification endpoints
+│       ├── services/
+│       │   ├── emailService.js        # Nodemailer SMTP integration
+│       │   ├── securityScanner.js     # ZIP malware scanning engine (30+ rules)
+│       │   └── sessionService.js      # Token signing, refresh rotation, session lifecycle
+│       ├── templates/welcomeEmail.js  # HTML email template
 │       ├── utils/passwordGenerator.js # Secure password generation
-│       └── tests/                  # Jest + Supertest API tests
+│       └── tests/                     # Jest + Supertest API tests
 │
-├── slurm-master/                   # Slurm controller API agent
-│   ├── server.js                   # Express API wrapping sbatch, sacct, scontrol
-│   ├── package.json                # Dependencies (express, redis, axios, uuid)
-│   └── .env                        # Port, FTP credentials, webserver URL
+├── slurm-master/                      # Slurm controller API agent
+│   ├── server.js                      # Express API wrapping sbatch, sacct, scontrol
+│   ├── package.json                   # Dependencies (express, redis, axios, uuid)
+│   └── .env                           # Port, FTP credentials, webserver URL
 │
-├── slurm-worker/                   # Compute node API agent
-│   ├── app.py                      # Flask API for job submission, download, health checks
-│   └── requirements.txt            # Dependencies (Flask, APScheduler, requests)
+├── slurm-worker/                      # Compute node API agent
+│   ├── app.py                         # Flask API for job submission, download, health checks
+│   ├── requirements.txt               # Dependencies (Flask, APScheduler, requests)
+│   └── .env                           # FTP credentials
 │
-├── Vagrantfile                     # Local dev cluster (3 VMs: master + 2 workers)
-├── LICENSE                         # GNU GPLv3
-└── README.md                       # ← You are here
+├── assets/                            # Documentation assets
+│   └── arch.png                       # Architecture diagram
+├── LICENSE                            # GNU GPLv3
+└── README.md                          # ← You are here
 ```
 
 ---
@@ -257,24 +293,6 @@ The GUI will be available at **`http://localhost:5051`**.
 
 ---
 
-### Local Development with Vagrant
-
-For local testing, the included `Vagrantfile` provisions 3 Ubuntu 20.04 VMs:
-
-| VM | IP | Resources |
-|----|-----|-----------|
-| `slurm-master` | `192.168.56.20` | 2 CPUs, 4 GB RAM |
-| `slurm-worker` | `192.168.56.21` | 2 CPUs, 4 GB RAM |
-| `slurm-worker-2` | `192.168.56.22` | 2 CPUs, 4 GB RAM |
-
-```bash
-vagrant up
-```
-
-Port `5000` on the master VM is forwarded to `localhost:5000`.
-
----
-
 ## 🔌 API Reference
 
 ### Backend API (Port 5052)
@@ -283,7 +301,12 @@ Port `5000` on the master VM is forwarded to `localhost:5000`.
 |--------|----------|-------------|
 | `GET` | `/api/auth/check-admin` | Check if an admin account exists |
 | `POST` | `/api/auth/setup-admin` | Create the first admin user |
-| `POST` | `/api/auth/login` | Authenticate and receive JWT token |
+| `POST` | `/api/auth/login` | Authenticate; returns access token + sets refresh cookie |
+| `POST` | `/api/auth/refresh` | Rotate refresh token and issue new access token |
+| `POST` | `/api/auth/logout` | Revoke current session |
+| `POST` | `/api/auth/logout-all` | Revoke all sessions for user |
+| `GET` | `/api/auth/me` | Get authenticated user profile |
+| `GET` | `/api/auth/session-policy` | Get session TTL configuration |
 | `POST` | `/api/auth/signup` | Create a new user (admin only) |
 | `GET` | `/api/users/users` | List all users |
 | `PUT` | `/api/users/users/:id` | Update a user |
@@ -292,13 +315,15 @@ Port `5000` on the master VM is forwarded to `localhost:5000`.
 | `POST/DELETE` | `/api/users/user-groups` | Manage group membership |
 | `GET` | `/api/users/users/:userId/permissions` | Get effective permissions for a user |
 | `GET/POST/DELETE` | `/api/resources/resource-limits` | CRUD for resource quotas |
+| `GET` | `/api/resources/metrics` | Real-time CPU/memory/GPU metrics from Prometheus |
 | `POST` | `/api/nodes/connect` | Connect a master or worker node |
 | `GET` | `/api/nodes/get-nodes-list` | List all connected nodes |
 | `GET` | `/api/nodes/slurm-nodes` | Get real-time Slurm node status |
-| `POST` | `/api/jobs/upload-ftp` | Upload a job ZIP file via FTP |
+| `POST` | `/api/jobs/upload-ftp` | Upload ZIP file (with security scan) |
 | `GET` | `/api/jobs/slurm-jobs` | List all jobs (proxied from master) |
 | `POST` | `/api/jobs/submit-job` | Submit a job (proxied to master) |
 | `POST` | `/api/jobs/cancel-job` | Cancel a running job |
+| `GET` | `/api/jobs/export-csv` | Export job history as CSV (admin only) |
 | `GET` | `/api/jobs/download/:nodeIp/:filename` | Download job results from a worker |
 
 ### Slurm Master API (Port 5053)
@@ -335,14 +360,14 @@ The project includes test suites for both the backend and frontend:
 cd hpc-slurm-gui/backend
 npm test
 ```
-Tests cover: `auth`, `email`, `nodes`, `resources`, `users`
+Tests cover: `auth`, `email`, `nodes`, `resources`, `users`, `sessionService`, `sessionPolicy`, `sessionStore`, `phase4.e2e`
 
 ### Frontend Tests (Jest + React Testing Library)
 ```bash
 cd hpc-slurm-gui/frontend
 npm test
 ```
-Tests cover: `AdminSetup`, `Dashboard`, `Home`, `JobsPage`, `Login`, `RemoteNode`, `ResourceAllocation`
+Tests cover: `AdminSetup`, `Dashboard`, `Home`, `JobsPage`, `Login`, `RemoteNode`, `ResourceAllocation`, `AuthLifecycle`, `apiClient`, `idleAndCrossTab`, `sessionPolicy`
 
 ---
 
@@ -385,6 +410,26 @@ Key configurable values include:
 | `enable_nvidia_gpu_driver` | Install CUDA + NVIDIA drivers |
 | `enable_ib` | Enable InfiniBand support |
 | `slurm_node_config` | SLURM node hardware description |
+| `enable_monitoring` | Install Prometheus, Node Exporter, SLURM Exporter, DCGM Exporter |
+
+---
+
+## 🛡️ Security Scanner — Threat Detection Categories
+
+Every ZIP file uploaded through the job submission flow is scanned by a built-in rule engine **before** reaching the FTP server or SLURM. The scanner inspects `.sh`, `.bash`, `.py`, `.js`, `.yaml`, `.yml`, `.json`, `.cfg`, `.conf`, `.ini`, and `.toml` files inside the archive.
+
+| Category | Examples Detected | Severity |
+|----------|-------------------|----------|
+| **Reverse Shells** | `bash -i >& /dev/tcp/...`, Python/Perl/Ruby socket shells, netcat listeners | 🔴 Critical |
+| **Privilege Escalation** | `sudo`, `chmod +s`, `setuid`, `nsenter`, `/etc/shadow` access | 🔴 Critical |
+| **Exploit Frameworks** | Metasploit, Cobalt Strike, Mimikatz, BloodHound, CrackMapExec | 🔴 Critical |
+| **Crypto Mining** | `xmrig`, `minerd`, `stratum+tcp://`, mining pool URLs | 🔴 Critical |
+| **Data Exfiltration** | `curl \| bash`, encoded payloads, `/etc/passwd` reads, keyloggers | 🟠 High |
+| **Resource Abuse** | Fork bombs, memory bombs, disk fill (`dd if=/dev/urandom`), infinite loops | 🟠 High |
+| **DoS Tools** | Slowloris, GoldenEye, HULK, hping3 | 🔴 Critical |
+| **Config Threats** | YAML deserialization (`!!python/object`), suspicious external URLs | 🔴 Critical |
+
+If threats are found, the upload is **rejected** and the user receives a detailed report listing each matched rule, file, line number, and severity.
 
 ---
 
@@ -400,6 +445,12 @@ sequenceDiagram
 
     User->>FE: Fill job form (name, resources, upload ZIP / Git URL)
     FE->>BE: POST /api/jobs/upload-ftp (ZIP file)
+    BE->>BE: Security Scanner — scan ZIP against 30+ rules
+    alt Threats detected
+        BE-->>FE: 400 — threat report (files, lines, severity)
+        FE-->>User: "Upload rejected" with threat details
+    end
+    BE->>BE: Upload clean file to FTP
     BE-->>FE: FTP download URL
     FE->>BE: POST /api/jobs/submit-job (job metadata + URL)
     BE->>SM: POST /submit-job (proxied)
