@@ -257,6 +257,10 @@ The master API will start on the configured port (default: `5053`). **Keep this 
 # Download or clone the slurm-worker directory to each worker node
 cd slurm-worker
 
+# Configure environment
+cp .env.example .env
+# Set FTP_USER and FTP_PASSWORD
+
 # Install dependencies and start
 pip install -r requirements.txt
 python3 app.py
@@ -271,8 +275,11 @@ The worker API will start on port `5053`. **Keep this running on every compute n
 cd hpc-slurm-gui
 
 # Configure backend environment
-vim backend/.env
-# Set JWT_SECRET, SLURM_PORT, email settings, and CORS_ORIGIN
+cp backend/.env.example backend/.env
+# Edit backend/.env — set JWT_SECRET, FTP config, email settings, CORS_ORIGIN, PROMETHEUS_URL
+
+# Configure frontend environment (optional)
+cp frontend/.env.example frontend/.env
 
 # Start all services
 docker compose up -d

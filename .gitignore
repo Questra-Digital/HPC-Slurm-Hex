@@ -1,0 +1,33 @@
+# Environment files (contain secrets)
+.env
+
+# Dependencies
+node_modules/
+__pycache__/
+
+# Build output
+dist/
+build/
+
+# SQLite database files
+*.sqlite
+*.sqlite3
+data/
+
+# Grafana data
+grafana-data/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Vagrant
+.vagrant/
+
+# Logs
+*.log
+npm-debug.log*
